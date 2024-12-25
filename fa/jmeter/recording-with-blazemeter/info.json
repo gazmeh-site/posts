@@ -2,6 +2,8 @@
   "title":"ضبط با Blazemeter",
   "desc":"آموزش ضبط تست‌ها با استفاده از Blazemeter.",
   "tags":["جی‌میتر","Blazemeter","ضبط"],
-  "author":"فرانک دارابی",
-  "slug":"recording-with-blazemeter"
+  "writer":"faranak",
+  "slug":"recording-with-blazemeter",
+  "image": "./resources/cover.png",
+  "coverImage": "./resources/cover.png"
 }

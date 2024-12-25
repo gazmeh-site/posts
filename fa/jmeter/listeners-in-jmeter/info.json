@@ -2,6 +2,8 @@
   "title":"لیسنرها در جی‌میتر",
   "desc":"آشنایی با لیسنرها در جی‌میتر و کاربردهای آن‌ها.",
   "tags":["جی‌میتر","لیسنرها","کاربرد"],
-  "author":"فرانک دارابی",
-  "slug":"listeners-in-jmeter"
+  "writer":"faranak",
+  "slug":"listeners-in-jmeter",
+  "image": "./resources/cover.png",
+  "coverImage": "./resources/cover.png"
 }

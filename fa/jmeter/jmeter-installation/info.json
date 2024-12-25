@@ -2,6 +2,9 @@
   "title":"نصب جی‌میتر",
   "desc":"راهنمای نصب جی‌میتر بر روی سیستم‌های مختلف.",
   "tags":["جی‌میتر","نصب","راهنما"],
-  "author":"فرانک دارابی",
-  "slug":"jmeter-installation"
+  "writer":"faranak",
+  "slug":"jmeter-installation",
+  "image": "./resources/cover.png",
+  "coverImage": "./resources/cover.png"
+
 }
