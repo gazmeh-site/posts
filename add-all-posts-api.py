@@ -2,6 +2,8 @@ import os
 import json
 import requests
 
+# CONSTANTS
+REPOSITORY_NAME = "gazmeh-site/posts"
 
 # URLs for the backend
 BASE_API_URL = "http://localhost:1337/api"
@@ -69,6 +71,10 @@ def add_posts(base_path, locale):
         if os.path.exists(info_path):
             with open(info_path, 'r', encoding='utf-8') as file:
                 data = json.load(file)
+
+                # repo field
+                if REPOSITORY_NAME and not 'repo' in data:
+                    data['repo'] = REPOSITORY_NAME
 
                 # location field
                 if not 'location' in data:
