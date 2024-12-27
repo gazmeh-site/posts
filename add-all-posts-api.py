@@ -76,7 +76,7 @@ def add_posts(base_path, locale):
                 
                 # slug field
                 if not 'slug' in data:
-                    data['slug'] = f"{folder}-{get_dirname(base_path)}"
+                    data['slug'] = f"{get_dirname(base_path)}-{folder}"
 
                 # tags field
                 if 'tags' in data:
@@ -110,7 +110,6 @@ def add_posts(base_path, locale):
 # test functions
 def test_functions():
     print(f"base directory: {get_dirname(base_path)}")
-    print(folders)
     given_tag='jmeter'
     tag_id = get_tag_id(given_tag, allTags)
     if tag_id:
