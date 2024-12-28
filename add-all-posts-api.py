@@ -83,12 +83,15 @@ def add_posts(base_path, locale):
             with open(info_path, 'r', encoding='utf-8') as file:
                 data = json.load(file)
 
+                #repo field
+                data['repository'] = REPOSITORY
+
                 #location field
                 data['location'] = f"{locale}/{get_dirname(base_path)}/{folder}"
 
                 # baseUrl field
                 repo_base_url = f"{REPOSITORY_URL}/{data['location']}"
-                data['baseUrl'] = repo_base_url
+                data['baseUrl'] = f"{repo_base_url}/"
 
                 # content field
                 content_path = os.path.join(folder_path, "content.md")
