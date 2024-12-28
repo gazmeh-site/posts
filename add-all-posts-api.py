@@ -3,7 +3,8 @@ import json
 import requests
 
 # CONSTANTS
-REPOSITORY_NAME = "gazmeh-site/posts"
+REPOSITORY = "gazmeh-site/posts"
+REPOSITORY_URL = f"https://raw.githubusercontent.com/{REPOSITORY}/main"
 
 # URLs for the backend
 BASE_API_URL = "http://localhost:1337/api"
@@ -59,37 +60,60 @@ def add_post(post):
     data = {'data':post}
     response = requests.post(ADD_POST_API_URL, json=data)
     if response.status_code == 201:
-        print(f"Successfully added: {data['data']['location']}")
+        print(f"Successfully added: {data['data']['slug']}")
     else:
-        print(f"Failed to add: {data['data']['location']}, Status Code: {response.status_code}, Response: {response.text}")
+        print(f"Failed to add: {data['data']['slug']}, Status Code: {response.status_code}, Response: {response.text}")
 
-# Iterate over each folder and read the info.json file and add the post
+# Function to check if an image file exists in the resources folder
+def image_exists(folder_path, image_name):
+    extensions = ['png', 'jpeg', 'webp']
+    for ext in extensions:
+        image_path = os.path.join(folder_path,'resources', f"{image_name}.{ext}")
+        if os.path.exists(image_path):
+            return image_path
+    return None
+
+# Iterate over each folder and read the config.json file and add the post
 def add_posts(base_path, locale):
-    folders=get_folders(base_path)
+    folders = get_folders(base_path)
     for folder in folders:
-        info_path = os.path.join(base_path, folder, "info.json")
+        folder_path = os.path.join(base_path, folder)
+        info_path = os.path.join(folder_path, "config.json")
         if os.path.exists(info_path):
             with open(info_path, 'r', encoding='utf-8') as file:
                 data = json.load(file)
 
-                # repo field
-                if REPOSITORY_NAME and not 'repo' in data:
-                    data['repo'] = REPOSITORY_NAME
+                #location field
+                data['location'] = f"{locale}/{get_dirname(base_path)}/{folder}"
 
-                # location field
-                if not 'location' in data:
-                    data['location'] = f"{locale}/{get_dirname(base_path)}/{folder}"
-                
+                # baseUrl field
+                repo_base_url = f"{REPOSITORY_URL}/{data['location']}"
+                data['baseUrl'] = repo_base_url
+
+                # content field
+                content_path = os.path.join(folder_path, "content.md")
+                if os.path.exists(content_path):
+                    with open(content_path, 'r', encoding='utf-8') as content_file:
+                        data['content'] = content_file.read()
+
                 # slug field
                 if not 'slug' in data:
                     data['slug'] = f"{get_dirname(base_path)}-{folder}"
 
+                # image fields
+                all_image_fields = ['image','imageCover','imageCard','imageThumbnail','imageBackground']
+                for image_field in all_image_fields:
+                    if not image_field in data:
+                        image_path = image_exists(folder_path, image_field)
+                        if image_path:
+                            data[image_field]=f"{repo_base_url}/resources/{os.path.basename(image_path)}"
+
                 # tags field
                 if 'tags' in data:
-                    tags=data['tags']
+                    tags = data['tags']
                 else:
-                    tags=[get_dirname(base_path)]
-                
+                    tags = [get_dirname(base_path)]
+
                 tag_ids = []
                 for tag in tags:
                     tag_id = get_tag_id(tag, allTags)
@@ -98,7 +122,7 @@ def add_posts(base_path, locale):
                     else:
                         print(f"Tag not found: {tag}")
 
-                data['tags']=tag_ids
+                data['tags'] = tag_ids
 
                 # author field
                 users = get_all_users()
@@ -108,10 +132,10 @@ def add_posts(base_path, locale):
                 else:
                     print(f"writer not found: {data['writer']}")
                     data['writer'] = None
-                               
+
                 add_post(data)
         else:
-            print(f"info.json not found in {folder}")
+            print(f"config.json not found in {folder}")
 
 # test functions
 def test_functions():
