@@ -15,7 +15,7 @@
 @Test
 public void loginTest() {
     WebDriver driver = new ChromeDriver();
-    driver.get(‘gazmeh.ir/login’);
+    driver.get(‘gazmeh.ir/fa/auth/login’);
     driver.findElement(By.id("username")).sendKeys(username);
     driver.findElement(By.id("password")).sendKeys(password);
     driver.findElement(By.id("login")).click();
@@ -35,7 +35,7 @@ public void loginTest() {
 ```
 *** Test Cases ***
 Login to Web APP
-    Open Browser    gazmeh.ir/login    chrome
+    Open Browser    gazmeh.ir/fa/auth/login    chrome
     Input Text    username_field    ${username}
     Input Text    password_field    ${password}
     Click Button    login_button
@@ -50,7 +50,7 @@ Login to Web APP
 
 ```
 it('Login Test', () => {
-  cy.visit(‘gazmeh.ir/login’)
+  cy.visit(‘gazmeh.ir/fa/auth/login’)
   cy.get('#username').type(username)
   cy.get('#password').type(password)
   cy.get('#login').click()
@@ -74,7 +74,7 @@ it('Login Test', () => {
 async function loginTest() {
   const browser = await playwright.chromium.launch();
   const page = await browser.newPage();
-  await page.goto(‘gazmeh.ir/login’);
+  await page.goto(‘gazmeh.ir/fa/auth/login’);
   await page.fill('#username', username);
   await page.fill('#password', password);
   await page.click('#login');
