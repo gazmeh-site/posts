@@ -1,4 +1,5 @@
 import os
+import sys
 import json
 import requests
 
@@ -6,11 +7,26 @@ import requests
 REPOSITORY = "gazmeh-site/posts"
 REPOSITORY_URL = f"https://raw.githubusercontent.com/{REPOSITORY}/main"
 
-# URLs for the backend
-BASE_API_URL = "http://localhost:1337/api"
+# ---------------------------------------------------------------------------
+# Backend configuration (override via env vars for a hosted/remote CMS):
+#   STRAPI_URL    base URL of the CMS, e.g. https://cms.gazmeh.ir
+#                 (default: http://localhost:1337)
+#   STRAPI_TOKEN  a Strapi API token; sent as "Authorization: Bearer <token>"
+#                 (default: none — works only if the endpoints are public)
+# ---------------------------------------------------------------------------
+BASE_URL = os.getenv("STRAPI_URL", "http://localhost:1337").rstrip("/")
+BASE_API_URL = f"{BASE_URL}/api"
 ADD_POST_API_URL = f"{BASE_API_URL}/posts"
 TAGS_API_URL = f"{BASE_API_URL}/post-tags"
 USERS_API_URL = f"{BASE_API_URL}/users"
+
+# A single session carries the auth header (if any) on every request.
+session = requests.Session()
+_token = os.getenv("STRAPI_TOKEN")
+if _token:
+    session.headers.update({"Authorization": f"Bearer {_token}"})
+
+print(f"Target CMS: {BASE_URL}  |  Auth: {'token' if _token else 'none (public)'}\n")
 
 
 # Function to get the directory name of base_path
@@ -23,7 +39,7 @@ def get_folders(base_path):
 
 # Function to get all tags from the backend
 def get_all_tags():
-    response = requests.get(TAGS_API_URL)
+    response = session.get(TAGS_API_URL)
     if response.status_code == 200:
         return response.json().get('data', [])
     else:
@@ -40,7 +56,7 @@ def get_tag_id(tag_name, tags):
 
 # Function to get all users from the backend
 def get_all_users():
-    response = requests.get(USERS_API_URL)
+    response = session.get(USERS_API_URL)
     if response.status_code == 200:
         return response.json()
     else:
@@ -58,7 +74,7 @@ def get_user_id(username, users):
 # Function to add a post to backend
 def add_post(post):
     data = {'data':post}
-    response = requests.post(ADD_POST_API_URL, json=data)
+    response = session.post(ADD_POST_API_URL, json=data)
     if response.status_code == 201:
         print(f"Successfully added: {data['data']['slug']}")
     else:
@@ -73,72 +89,93 @@ def image_exists(folder_path, image_name):
             return image_path
     return None
 
-# Iterate over each folder and read the config.json file and add the post
+# Process a single article folder and push it to the backend.
+#   folder_path : path to the article folder (e.g. "fa/benchmark/types-of-benchmarks")
+#   locale      : locale folder name (e.g. "fa")
+#   topic       : topic/category folder name (e.g. "benchmark")
+#   folder      : article folder name (e.g. "types-of-benchmarks")
+def process_and_add_post(folder_path, locale, topic, folder):
+    info_path = os.path.join(folder_path, "config.json")
+    if not os.path.exists(info_path):
+        print(f"config.json not found in {folder_path}")
+        return
+
+    with open(info_path, 'r', encoding='utf-8') as file:
+        data = json.load(file)
+
+        #repo field
+        data['repository'] = REPOSITORY
+
+        #location field
+        data['location'] = f"{locale}/{topic}/{folder}"
+
+        # baseUrl field
+        repo_base_url = f"{REPOSITORY_URL}/{data['location']}"
+        data['baseUrl'] = f"{repo_base_url}/"
+
+        # content field
+        content_path = os.path.join(folder_path, "content.md")
+        if os.path.exists(content_path):
+            with open(content_path, 'r', encoding='utf-8') as content_file:
+                data['content'] = content_file.read()
+
+        # slug field
+        if not 'slug' in data:
+            data['slug'] = f"{topic}-{folder}"
+
+        # image fields (must match the Strapi "posts" content-type schema)
+        all_image_fields = ['image','imageCard','imageBackground']
+        for image_field in all_image_fields:
+            if not image_field in data:
+                image_path = image_exists(folder_path, image_field)
+                if image_path:
+                    data[image_field]=f"{repo_base_url}/resources/{os.path.basename(image_path)}"
+
+        # tags field
+        if 'tags' in data:
+            tags = data['tags']
+        else:
+            tags = [topic]
+
+        tag_ids = []
+        for tag in tags:
+            tag_id = get_tag_id(tag, allTags)
+            if tag_id:
+                tag_ids.append(tag_id)
+            else:
+                print(f"Tag not found: {tag}")
+
+        data['tags'] = tag_ids
+
+        # author field
+        users = get_all_users()
+        author_id = get_user_id(data['writer'], users)
+        if author_id:
+            data['writer'] = author_id
+        else:
+            print(f"writer not found: {data['writer']}")
+            data['writer'] = None
+
+        add_post(data)
+
+# Add a single post given its path relative to posts/ (e.g. "fa/benchmark/types-of-benchmarks").
+# Accepts leading "./", trailing slashes and Windows backslashes.
+def add_single_post(post_path):
+    parts = [p for p in post_path.replace('\\', '/').split('/') if p and p != '.']
+    if len(parts) != 3:
+        print(f"Invalid post path (expected locale/topic/folder): {post_path}")
+        return
+    locale, topic, folder = parts
+    folder_path = os.path.join('.', *parts)
+    process_and_add_post(folder_path, locale, topic, folder)
+
+# Iterate over every article inside a topic folder and add all of them.
 def add_posts(base_path, locale):
+    topic = get_dirname(base_path)
     folders = get_folders(base_path)
     for folder in folders:
         folder_path = os.path.join(base_path, folder)
-        info_path = os.path.join(folder_path, "config.json")
-        if os.path.exists(info_path):
-            with open(info_path, 'r', encoding='utf-8') as file:
-                data = json.load(file)
-
-                #repo field
-                data['repository'] = REPOSITORY
-
-                #location field
-                data['location'] = f"{locale}/{get_dirname(base_path)}/{folder}"
-
-                # baseUrl field
-                repo_base_url = f"{REPOSITORY_URL}/{data['location']}"
-                data['baseUrl'] = f"{repo_base_url}/"
-
-                # content field
-                content_path = os.path.join(folder_path, "content.md")
-                if os.path.exists(content_path):
-                    with open(content_path, 'r', encoding='utf-8') as content_file:
-                        data['content'] = content_file.read()
-
-                # slug field
-                if not 'slug' in data:
-                    data['slug'] = f"{get_dirname(base_path)}-{folder}"
-
-                # image fields
-                all_image_fields = ['image','imageCover','imageCard','imageThumbnail','imageBackground']
-                for image_field in all_image_fields:
-                    if not image_field in data:
-                        image_path = image_exists(folder_path, image_field)
-                        if image_path:
-                            data[image_field]=f"{repo_base_url}/resources/{os.path.basename(image_path)}"
-
-                # tags field
-                if 'tags' in data:
-                    tags = data['tags']
-                else:
-                    tags = [get_dirname(base_path)]
-
-                tag_ids = []
-                for tag in tags:
-                    tag_id = get_tag_id(tag, allTags)
-                    if tag_id:
-                        tag_ids.append(tag_id)
-                    else:
-                        print(f"Tag not found: {tag}")
-
-                data['tags'] = tag_ids
-
-                # author field
-                users = get_all_users()
-                author_id = get_user_id(data['writer'], users)
-                if author_id:
-                    data['writer'] = author_id
-                else:
-                    print(f"writer not found: {data['writer']}")
-                    data['writer'] = None
-
-                add_post(data)
-        else:
-            print(f"config.json not found in {folder}")
+        process_and_add_post(folder_path, locale, topic, folder)
 
 # test functions
 def test_functions():
@@ -158,13 +195,34 @@ def test_functions():
 
 allTags = get_all_tags()
 allUsers = get_all_users()
- 
-# add all posts
-locals = get_folders(".")
-for locale in locals:
-    base_path = f"./{locale}"
-    topics = get_folders(base_path)
-    for topic in topics:
-        base_path = f"./{locale}/{topic}"
-        add_posts(base_path, locale)
 
+# ---------------------------------------------------------------------------
+# Usage:
+#   python3 add-all-posts-api.py fa/benchmark/types-of-benchmarks
+#   python3 add-all-posts-api.py fa/benchmark/types-of-benchmarks fa/devops/introduction
+#
+# Pass one or more post paths (locale/topic/folder) to upload ONLY those posts
+# as new entries. Passing none uploads ALL posts (this creates duplicates on
+# re-run, so always pass paths when adding new content).
+#
+# Example with a hosted CMS (token read from env, never committed):
+#   STRAPI_URL=https://cms.gazmeh.ir STRAPI_TOKEN=xxxx \
+#     python3 add-all-posts-api.py fa/benchmark/types-of-benchmarks
+# ---------------------------------------------------------------------------
+target_posts = [p for p in sys.argv[1:] if not p.startswith('-')]
+
+if target_posts:
+    print(f"Uploading {len(target_posts)} specific post(s):")
+    for post_path in target_posts:
+        add_single_post(post_path)
+else:
+    print("⚠️  No post paths provided — uploading ALL posts (this creates duplicates on re-run).")
+    print("    To upload specific posts only, pass their paths, e.g.:")
+    print("    python3 add-all-posts-api.py fa/benchmark/types-of-benchmarks\n")
+    locales = get_folders(".")
+    for locale in locales:
+        base_path = f"./{locale}"
+        topics = get_folders(base_path)
+        for topic in topics:
+            base_path = f"./{locale}/{topic}"
+            add_posts(base_path, locale)
