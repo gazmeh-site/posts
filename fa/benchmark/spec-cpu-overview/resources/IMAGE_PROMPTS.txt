@@ -1,0 +1,5 @@
+imageCover.png (cover, 16:9):
+A clean isometric 3D tech illustration of a powerful central server microchip placed on a pedestal, connected to floating data visualization elements like speedometers, performance charts, and glowing geometric calculation nodes. The scene uses a vibrant color palette of electric blue, neon orange, and mint green. The background is a bright, soft white to light gray subtle gradient, creating a light-themed website aesthetic. Minimalist geometric art style, abstract representation of CPU processing power and enterprise benchmarking, no text, no watermark, wide 16:9 aspect ratio.
+
+imageThumbnail.png (thumbnail, 1:1):
+A clean isometric 3D tech illustration of a single, iconic microchip with glowing circuit traces, integrated with a large, minimalist performance gauge or speedometer symbol to represent benchmarking. The design is simple, bold, and highly readable at small sizes. Vibrant electric blue and mint green accents against a bright white to light gray subtle gradient background. Minimalist geometric art style, abstract tech icon, no text, no watermark, square 1:1 aspect ratio.
