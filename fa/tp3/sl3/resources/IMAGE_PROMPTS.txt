@@ -1,0 +1,5 @@
+imageCover.png (cover, 16:9):
+image-9
+
+imageThumbnail.png (thumbnail, 1:1):
+image_card-9
