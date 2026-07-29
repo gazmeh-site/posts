@@ -1,0 +1,5 @@
+imageCover.png (cover, 16:9):
+A clean isometric 3D tech illustration of a complex central computer processor glowing with neon blue circuit lines, surrounded by floating abstract UI panels, charts, and checklists representing performance evaluation. The scene is rendered with soft shadows on a bright light gradient background transitioning from soft white to light gray. No text, no watermark, wide 16:9 aspect ratio.
+
+imageThumbnail.png (thumbnail, 1:1):
+A clean isometric 3D tech illustration of a single, iconic microchip placed on a sleek pedestal, featuring a glowing speedometer and a large checkmark symbol to represent performance testing. Soft shadows on a bright light gradient background transitioning from soft white to light gray. No text, no watermark, square 1:1 aspect ratio.
