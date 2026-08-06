@@ -1,0 +1,5 @@
+imageCover.png (cover, 16:9):
+A clean isometric 3D illustration of a futuristic enterprise data center server rack connected to a glowing golden CPU chip, with abstract digital metric dashboards and floating performance graphs surrounding it, modern tech geek style, bright soft white to light gray gradient background, highly detailed, no text, no watermark, --ar 16:9
+
+imageThumbnail.png (thumbnail, 1:1):
+A clean isometric 3D illustration of a single glowing microprocessor chip placed on a minimalist pedestal with a simple floating checkmark and speed dial, modern tech geek style, bright soft white to light gray gradient background, iconic and simple to read at small sizes, no text, no watermark, --ar 1:1
