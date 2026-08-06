@@ -1,0 +1,5 @@
+imageCover.png (cover, 16:9):
+A clean isometric tech illustration of a modern enterprise server rack on a pedestal, with glowing data streams and abstract CPU chip icons emerging from the hardware, symbolizing raw processing power and rigorous hardware benchmarking. The scene features a soft white to light gray gradient background with subtle, bright blue and orange accent glows to highlight the data flow. Minimalist corporate geek aesthetic, highly detailed 3D isometric style, no text, no watermark, 16:9 aspect ratio.
+
+imageThumbnail.png (thumbnail, 1:1):
+A simple, iconic clean isometric illustration of a single, glowing central processor (CPU) chip placed on a minimalist performance gauge or speedometer dial, representing industry standard testing and performance measurement. Soft white to light gray gradient background with bright blue accent lighting to make the chip stand out. Clean flat minimalist tech style, easily readable at small sizes, no text, no watermark, 1:1 aspect ratio.
