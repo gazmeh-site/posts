@@ -1,0 +1,260 @@
+{
+  "common": {
+    "actions": {
+      "cancel": "انصراف",
+      "confirm": "تایید",
+      "continue": "ادامه",
+      "goBack": "بازگشت",
+      "reset": "بازنشانی",
+      "submit": "ذخیره"
+    },
+    "status": {
+      "loading": "در حال بارگذاری...",
+      "error": {
+        "default": "خطایی رخ داد",
+        "serverConnection": "اتصال به سرور برقرار نشد"
+      }
+    }
+  },
+  "auth": {
+    "login": {
+      "title": "برای استفاده از برنامه وارد شوید",
+      "form": {
+        "email": {
+          "label": "آدرس ایمیل",
+          "required": "ایمیل الزامی است",
+          "placeholder": "me@example.com"
+        },
+        "password": {
+          "label": "رمز عبور",
+          "required": "رمز عبور الزامی است"
+        },
+        "actions": {
+          "signin": "ورود"
+        },
+        "alternativeText": {
+          "or": "یا"
+        }
+      },
+      "errors": {
+        "default": "ورود ناموفق بود",
+        "signin": "با حساب دیگری امتحان کنید",
+        "oauthSignin": "با حساب دیگری امتحان کنید",
+        "redirectUriMismatch": "آدرس بازگشت با تنظیمات OAuth مطابقت ندارد",
+        "oauthCallback": "با حساب دیگری امتحان کنید",
+        "oauthCreateAccount": "با حساب دیگری امتحان کنید",
+        "emailCreateAccount": "با حساب دیگری امتحان کنید",
+        "callback": "با حساب دیگری امتحان کنید",
+        "oauthAccountNotLinked": "برای احراز هویت با همان حساب اولیه وارد شوید",
+        "emailSignin": "ارسال ایمیل ممکن نبود",
+        "emailVerify": "لطفاً ایمیل خود را تایید کنید؛ یک ایمیل جدید ارسال شد",
+        "credentialsSignin": "ورود ناموفق. اطلاعات را بررسی کنید",
+        "sessionRequired": "برای دسترسی به این صفحه وارد شوید"
+      }
+    },
+    "provider": {
+      "continue": "ادامه با {{provider}}"
+    }
+  },
+  "chat": {
+    "input": {
+      "placeholder": "پیام خود را اینجا بنویسید...",
+      "actions": {
+        "send": "ارسال پیام",
+        "stop": "توقف",
+        "attachFiles": "پیوست فایل"
+      }
+    },
+    "favorites": {
+      "use": "استفاده از پیام‌های مورد علاقه",
+      "headline": "پیام‌های مورد علاقه",
+      "remove": "حذف از مورد علاقه‌ها",
+      "empty": {
+        "title": "هنوز پیامی ذخیره نشده",
+        "description": "پیامی بفرستید و آن را ستاره‌دار کنید تا اینجا نمایش داده شود"
+      }
+    },
+    "commands": {
+      "button": "ابزارها",
+      "changeTool": "تغییر ابزار",
+      "availableTools": "ابزارهای موجود"
+    },
+    "speech": {
+      "start": "شروع ضبط",
+      "stop": "توقف ضبط",
+      "connecting": "در حال اتصال"
+    },
+    "fileUpload": {
+      "dragDrop": "فایل‌ها را اینجا رها کنید",
+      "browse": "انتخاب فایل",
+      "sizeLimit": "حداکثر:",
+      "errors": {
+        "failed": "بارگذاری ناموفق بود",
+        "cancelled": "بارگذاری لغو شد:"
+      },
+      "actions": {
+        "cancelUpload": "لغو بارگذاری",
+        "removeAttachment": "حذف پیوست"
+      }
+    },
+    "messages": {
+      "status": {
+        "using": "در حال استفاده از",
+        "used": "استفاده‌شده"
+      },
+      "actions": {
+        "copy": {
+          "button": "کپی در کلیپ‌بورد",
+          "success": "کپی شد!"
+        }
+      },
+      "feedback": {
+        "positive": "مفید",
+        "negative": "غیرمفید",
+        "edit": "ویرایش بازخورد",
+        "dialog": {
+          "title": "افزودن نظر",
+          "submit": "ارسال بازخورد",
+          "yourFeedback": "بازخورد شما..."
+        },
+        "status": {
+          "updating": "در حال به‌روزرسانی",
+          "updated": "بازخورد به‌روز شد"
+        }
+      }
+    },
+    "history": {
+      "title": "ورودی‌های اخیر",
+      "empty": "خالی است...",
+      "show": "نمایش تاریخچه"
+    },
+    "settings": {
+      "title": "مشخصات مقاله",
+      "customize": "پیش از شروع نگارش، مشخصات زیر را کامل کنید"
+    },
+    "watermark": "مدل‌های زبانی ممکن است اشتباه کنند؛ اطلاعات مهم را بررسی کنید."
+  },
+  "threadHistory": {
+    "sidebar": {
+      "title": "گفت‌وگوهای قبلی",
+      "filters": {
+        "search": "جست‌وجو",
+        "placeholder": "جست‌وجو در گفت‌وگوها..."
+      },
+      "timeframes": {
+        "today": "امروز",
+        "yesterday": "دیروز",
+        "previous7days": "۷ روز گذشته",
+        "previous30days": "۳۰ روز گذشته"
+      },
+      "empty": "گفت‌وگویی پیدا نشد",
+      "actions": {
+        "close": "بستن نوار کناری",
+        "open": "باز کردن نوار کناری"
+      }
+    },
+    "thread": {
+      "untitled": "گفت‌وگوی بدون عنوان",
+      "menu": {
+        "rename": "تغییر نام",
+        "share": "اشتراک‌گذاری",
+        "delete": "حذف"
+      },
+      "actions": {
+        "share": {
+          "title": "اشتراک لینک گفت‌وگو",
+          "button": "اشتراک",
+          "status": {
+            "copied": "لینک کپی شد",
+            "created": "لینک اشتراک ساخته شد!",
+            "unshared": "اشتراک این گفت‌وگو غیرفعال شد"
+          },
+          "error": {
+            "create": "ساخت لینک اشتراک ناموفق بود",
+            "unshare": "لغو اشتراک ناموفق بود"
+          }
+        },
+        "delete": {
+          "title": "تایید حذف",
+          "description": "این کار گفت‌وگو و همه‌ی پیام‌ها را حذف می‌کند و قابل بازگشت نیست",
+          "success": "گفت‌وگو حذف شد",
+          "inProgress": "در حال حذف گفت‌وگو"
+        },
+        "rename": {
+          "title": "تغییر نام گفت‌وگو",
+          "description": "نام جدیدی برای این گفت‌وگو وارد کنید",
+          "form": {
+            "name": {
+              "label": "نام",
+              "placeholder": "نام جدید را وارد کنید"
+            }
+          },
+          "success": "نام گفت‌وگو تغییر کرد!",
+          "inProgress": "در حال تغییر نام"
+        }
+      }
+    }
+  },
+  "navigation": {
+    "header": {
+      "chat": "گفت‌وگو",
+      "readme": "راهنما",
+      "theme": {
+        "light": "روشن",
+        "dark": "تیره",
+        "system": "بر اساس سیستم"
+      }
+    },
+    "newChat": {
+      "button": "گفت‌وگوی جدید",
+      "dialog": {
+        "title": "شروع گفت‌وگوی جدید",
+        "description": "این کار تاریخچه‌ی گفت‌وگوی فعلی را پاک می‌کند. مطمئن هستید؟",
+        "tooltip": "گفت‌وگوی جدید"
+      }
+    },
+    "user": {
+      "menu": {
+        "settings": "تنظیمات",
+        "settingsKey": "S",
+        "apiKeys": "کلیدهای API",
+        "logout": "خروج"
+      }
+    }
+  },
+  "apiKeys": {
+    "title": "کلیدهای API لازم",
+    "description": "برای استفاده از این برنامه، کلیدهای زیر لازم است. این کلیدها روی حافظه‌ی محلی دستگاه شما ذخیره می‌شوند.",
+    "success": {
+      "saved": "با موفقیت ذخیره شد"
+    }
+  },
+  "alerts": {
+    "info": "اطلاعات",
+    "note": "توجه",
+    "tip": "نکته",
+    "important": "مهم",
+    "warning": "هشدار",
+    "caution": "احتیاط",
+    "debug": "دیباگ",
+    "example": "مثال",
+    "success": "موفقیت",
+    "help": "راهنما",
+    "idea": "ایده",
+    "pending": "در انتظار",
+    "security": "امنیت",
+    "beta": "بتا",
+    "best-practice": "بهترین روش"
+  },
+  "components": {
+    "MultiSelectInput": {
+      "placeholder": "انتخاب کنید..."
+    },
+    "DatePickerInput": {
+      "placeholder": {
+        "single": "تاریخ را انتخاب کنید",
+        "range": "بازه‌ی تاریخ را انتخاب کنید"
+      }
+    }
+  }
+}
