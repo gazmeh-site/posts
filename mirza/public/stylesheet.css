@@ -1,8 +1,15 @@
 /* Mirza's Persian RTL interface for Chainlit 2.x. */
 
-@import url("/public/fonts/vazirmatn.css");
+/* The Vazirmatn @font-face rules are loaded by a <link> in the page <head> via Chainlit's
+   theme mechanism (public/theme.json → custom_fonts). That same mechanism replaces
+   Chainlit's default Google Fonts "Inter" <link>, so the font is fully offline. */
 
-:root {
+/* Chainlit's bundled CSS sets :root { --font-sans: "Inter", sans-serif } and applies
+   var(--font-sans) to the body. A plain :root here would only tie at specificity (0,1,0),
+   so the winner is decided by load order (fragile) — and Inter is fetched from Google
+   Fonts (an online dependency). :root:root raises specificity to (0,2,0) > (0,1,0) so our
+   Vazirmatn stack wins regardless of order, making the chat page use the offline font. */
+:root:root {
   --font-sans: "Vazirmatn", "IRANSans", Tahoma, Arial, sans-serif;
 }
 
