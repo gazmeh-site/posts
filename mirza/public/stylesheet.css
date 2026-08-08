@@ -1,0 +1,148 @@
+/* Mirza's Persian RTL interface for Chainlit 2.x. */
+
+/* The Vazirmatn @font-face rules are loaded by a <link> in the page <head> via Chainlit's
+   theme mechanism (public/theme.json → custom_fonts). That same mechanism replaces
+   Chainlit's default Google Fonts "Inter" <link>, so the font is fully offline. */
+
+/* Chainlit's bundled CSS sets :root { --font-sans: "Inter", sans-serif } and applies
+   var(--font-sans) to the body. A plain :root here would only tie at specificity (0,1,0),
+   so the winner is decided by load order (fragile) — and Inter is fetched from Google
+   Fonts (an online dependency). :root:root raises specificity to (0,2,0) > (0,1,0) so our
+   Vazirmatn stack wins regardless of order, making the chat page use the offline font. */
+:root:root {
+  --font-sans: "Vazirmatn", "IRANSans", Tahoma, Arial, sans-serif;
+}
+
+html,
+body,
+#root,
+#app {
+  direction: rtl !important;
+  text-align: right;
+  font-family: var(--font-sans) !important;
+}
+
+/* Keep Chainlit, MUI, and Radix components on the same font. */
+body,
+body button,
+body input,
+body textarea,
+body select,
+body [role="dialog"],
+body [role="menu"],
+body [role="listbox"],
+body [role="tooltip"] {
+  font-family: var(--font-sans) !important;
+}
+
+/* Main interface regions. */
+#header,
+#welcome-screen,
+#thread-history,
+#message-composer,
+#chat-settings,
+#chat-settings-sidebar-content,
+#side-view-content,
+[role="dialog"],
+[role="menu"],
+[role="listbox"],
+[role="tooltip"],
+[data-radix-popper-content-wrapper],
+[data-sonner-toaster] {
+  direction: rtl !important;
+  text-align: right;
+}
+
+/* Forms, search, chat input, and settings. */
+label,
+input,
+textarea,
+select,
+[contenteditable="true"],
+[role="textbox"],
+[role="option"],
+[role="menuitem"] {
+  direction: rtl !important;
+  text-align: right !important;
+}
+
+input::placeholder,
+textarea::placeholder {
+  direction: rtl;
+  text-align: right;
+}
+
+/* Messages and Markdown. */
+.markdown,
+.markdown-body,
+[class*="message-content"],
+[class*="MessageContent"],
+p,
+li,
+blockquote,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+table,
+th,
+td {
+  direction: rtl;
+  text-align: right;
+}
+
+ul,
+ol {
+  padding-right: 1.5rem;
+  padding-left: 0;
+}
+
+blockquote {
+  border-right: 0.25rem solid currentColor;
+  border-left: 0;
+  padding-right: 1rem;
+  padding-left: 0;
+}
+
+/* Preserve LTR readability for technical text, slugs, URLs, and code. */
+pre,
+code,
+kbd,
+samp,
+[data-language] {
+  direction: ltr !important;
+  text-align: left !important;
+  unicode-bidi: isolate;
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace) !important;
+}
+
+/* Keep the natural icon/text order in Persian controls without altering code toolbars. */
+button,
+[role="button"],
+[role="tab"] {
+  direction: rtl;
+}
+
+/* Keep independent English content from inheriting an unsuitable direction. */
+bdi,
+[dir="auto"] {
+  unicode-bidi: plaintext;
+}
+
+/* Give Mirza's inline editor enough height and prevent message-container clipping. */
+iframe[src*="/public/mirza-editor.html"] {
+  width: 100% !important;
+  height: 85vh !important;
+  min-height: 600px;
+  max-height: none !important;
+  flex-shrink: 0 !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 10px;
+}
+/* Remove height clamps from the iframe's parent container. */
+*:has(> iframe[src*="/public/mirza-editor.html"]) {
+  max-height: none !important;
+  overflow: visible !important;
+}

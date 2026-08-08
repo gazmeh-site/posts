@@ -11,6 +11,12 @@ desktop.ini
 # Secrets
 .env
 
+# Local Mirza writer profile (copy mirza/.writer.example.py)
+/mirza/.writer.py
+
+# Mirza ephemeral in-chat editor drafts (created per edit, auto-cleaned)
+/mirza/public/mirza-draft-*.json
+
 # Python
 __pycache__/
 *.pyc
