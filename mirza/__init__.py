@@ -4,10 +4,7 @@ Flow (six worker nodes and five human checkpoints):
     START → draft → review → metadata → build → images → finish → END
     interrupt_before = ["draft", "metadata", "build", "images", "finish"]
 
-Run from posts/:
-    python -m mirza
-
-Run the RTL Chainlit interface:
+Run the RTL Chainlit interface from posts/:
     bash mirza/run-chainlit.sh -w
 
 Configure the text provider with LLM_PROVIDER in mirza/.env:
