@@ -1,128 +1,128 @@
-# میرزا ✍️
+# Mirza ✍️
 
-> دستیار مقاله‌نویسی وبلاگ **گزمه** — یک ایجنت تعاملی مبتنی بر [LangGraph](https://github.com/langchain-ai/langgraph) با حضور انسان در چرخه‌ی تصمیم‌گیری (Human-in-the-loop).
+> The **Gazmeh** blog writing assistant — an interactive [LangGraph](https://github.com/langchain-ai/langgraph)-based agent with a human-in-the-loop workflow.
 
-میرزا یک متن خام را می‌گیرد و بر اساس استانداردهای وبلاگ گزمه، قدم‌به‌قدم و با تأیید تو، آن را به یک مقاله‌ی کامل و آماده‌ی انتشار تبدیل می‌کند: از متن مارک‌داون و مشخصات مقاله گرفته تا تصاویر کاور و کارت و در نهایت یک شاخه برای PR در مخزن `posts`.
+Mirza takes a raw draft and, following Gazmeh's blog standards, turns it step by step — with your approval along the way — into a complete, publication-ready article. That includes the Markdown content, article metadata, cover/card images, and finally a PR branch in the `posts` repository.
 
-این فرایند پنج نقطه‌ی بازبینی انسانی دارد؛ بنابراین در هر مرحله می‌توانی نتیجه را تأیید کنی، خودت ویرایشش کنی، از هوش مصنوعی بخواهی اصلاحش کند یا به یکی از مراحل قبلی برگردی.
+The workflow includes five human review checkpoints, so at each stage you can approve the result, edit it yourself, ask the AI to revise it, or jump back to an earlier step.
 
-## میرزا چیست؟
+## What is Mirza?
 
-- **دو حالت برای تولید مقاله:**
-  - **`mdfy`** **(حالت پیش‌فرض):** متن کامل مقاله را به میرزا می‌دهی و او با حفظ محتوا، ساختار و لحن متن اصلی، آن را به مارک‌داون تمیز و استاندارد گزمه تبدیل می‌کند. در این حالت فقط قالب‌بندی و بلوک‌های بصری مجاز بهبود پیدا می‌کنند و محتوای اصلی دست‌نخورده می‌ماند.
-  - **`auto`****:** میرزا بر اساس سرفصل‌ها و اطلاعاتی که به‌صورت دستی وارد می‌کنی، مقاله را از صفر می‌نویسد.
-- **انسان در حلقه:** میرزا پیش از پنج مرحله‌ی اصلی متوقف می‌شود و منتظر تأیید یا اصلاح تو می‌ماند. هیچ فایلی بدون بازبینی نهایی نوشته یا push نمی‌شود.
-- **سفر در زمان:** هر زمان لازم باشد می‌توانی به یکی از مراحل قبلی برگردی و کار را از همان‌جا ادامه بدهی، یا کل گفت‌وگو را از ابتدا شروع کنی.
-- **مارک‌داون استاندارد گزمه:** میرزا فقط از ساختارهایی استفاده می‌کند که رندر سایت واقعاً از آن‌ها پشتیبانی می‌کند: هدینگ‌های `##` و `###`، بولد، ایتالیک، کد، فهرست، نقل‌قول، جدول، بلاک کد و پنج کانتینر هشدار `:::info/warning/danger/note/draft`.
-- **رابط چت وب راست‌چین:** ارتباط از طریق مرورگر با Chainlit. منطق تبدیل تصمیم کاربر به اکشن در `controller.next_command` متمرکز شده است.
-- **خروجی نهایی:** پوشه‌ی `fa/<topic>/<slug>/` شامل `config.json`، `content.md` و `resources/` (تصاویر و پرامپت‌ها)، به‌همراه commit و push روی شاخه‌ی `draft/<topic>-<slug>` و در نهایت آدرس PR.
+- **Two article generation modes:**
+  - **`mdfy`** **(default):** You provide the complete article, and Mirza converts it into clean, Gazmeh-compatible Markdown while preserving the original content, structure, and tone. Only formatting and supported visual blocks are enhanced; the source content remains intact.
+  - **`auto`:** Mirza writes the article from scratch based on headings and the information you provide manually.
+- **Human-in-the-loop:** Mirza pauses before five major stages and waits for your approval or edits. No files are written or pushed without review.
+- **Time travel:** You can return to any previous stage and continue from there, or restart the conversation from scratch.
+- **Gazmeh-compatible Markdown:** Mirza only uses structures that the site renderer actually supports: `##` / `###` headings, bold, italic, inline code, lists, blockquotes, tables, code blocks, and the five alert containers `:::info/warning/danger/note/draft`.
+- **RTL web chat interface:** Interaction happens in the browser through Chainlit. The logic that turns user decisions into actions is centralized in `controller.next_command`.
+- **Final output:** A `fa/<topic>/<slug>/` directory containing `config.json`, `content.md`, and `resources/` (images and prompts), plus a commit and push to the `draft/<topic>-<slug>` branch, followed by a PR URL.
 
-## فلوگراف
+## Flow Graph
 
-میرزا یک گراف LangGraph با **شش گره‌ی پردازشی** و **پنج نقطه‌ی توقف انسانی** دارد:
+Mirza uses a LangGraph graph with **six processing nodes** and **five human review checkpoints**:
 
 ```text
 START → draft → review → metadata → build → images → finish → END
 ```
 
-توقف‌های انسانی (`interrupt_before`) پیش از این گره‌ها اتفاق می‌افتند:
+Human checkpoints (`interrupt_before`) occur before:
 
-`draft`، `metadata`، `build`، `images` و `finish`
+`draft`, `metadata`, `build`, `images`, and `finish`
 
-گره `review` که نقش ویراستار را دارد، بلافاصله بعد از `draft` و به‌شکل **خودکار** اجرا می‌شود.
+The `review` node acts as the editor and runs **automatically** immediately after `draft`.
 
-| گام | مرحله‌ی بازبینی | گره        | کار                                                                                                           |
-| --- | --------------- | ---------- | ------------------------------------------------------------------------------------------------------------- |
-| ۱   | دریافت مقاله    | `draft`    | نویسنده: اجرای `mdfy` برای تبدیل وفادارانه‌ی متن، اجرای `auto` برای نگارش از صفر، یا بازنویسی بر اساس بازخورد |
-| —   | —               | `review`   | ویراستار: بهبود خودکار متن و ارائه‌ی یادداشت‌های موردی، بدون توقف                                             |
-| ۲   | بازبینی متن     | `metadata` | تعیین عنوان، تگ، `topic` و `slug` و بررسی تداخل مسیر با مقاله‌های موجود                                       |
-| ۳   | مشخصات و مسیر   | `build`    | ساخت پوشه، `config.json`، `content.md` و `resources/`                                                         |
-| ۴   | حالت تصویر      | `images`   | تولید پرامپت انگلیسی برای تصویر کاور (۱۶:۹) و کارت (۱:۱)                                                      |
-| ۵   | پرامپت تصویر    | `finish`   | تولید فایل‌های تصویر، ذخیره‌ی پرامپت‌ها، ساخت شاخه، commit، push و نمایش آدرس PR                              |
+| Step | Review Stage | Node | Responsibility |
+| --- | --- | --- | --- |
+| 1 | Receive article | `draft` | Writer: run `mdfy` for faithful conversion, run `auto` to write from scratch, or rewrite based on feedback |
+| — | — | `review` | Editor: automatically improve the text and provide targeted notes without pausing |
+| 2 | Review article | `metadata` | Determine title, tags, `topic`, and `slug`, and check for path conflicts with existing articles |
+| 3 | Metadata and path | `build` | Create the directory, `config.json`, `content.md`, and `resources/` |
+| 4 | Image mode | `images` | Generate English prompts for the cover image (16:9) and card image (1:1) |
+| 5 | Image prompts | `finish` | Generate image files, save prompts, create the branch, commit, push, and display the PR URL |
 
-وضعیت گراف (`state`) در `graph/state.py` تعریف شده و checkpointer آن در حافظه (`MemorySaver`) قرار دارد. به همین دلیل هر گفت‌وگو یا نشست ترمینال، یک `thread` مستقل دارد.
+The graph state is defined in `graph/state.py`, and its checkpointer uses in-memory storage (`MemorySaver`). As a result, each conversation or terminal session has its own independent `thread`.
 
-## پیش‌نیازها
+## Requirements
 
-- پایتون **۳.۱۳ یا بالاتر**
-- ابزار مدیریت پکیج [uv](https://docs.astral.sh/uv/)؛ وابستگی‌ها در `uv.lock` قفل شده‌اند.
-- یک کلید API برای مدل متنی:
-  - `ANTHROPIC_API_KEY` در حالت پیش‌فرض
-  - یا `GEMINI_API_KEY` در حالت Google
-- برای تولید خودکار تصویر، `GEMINI_API_KEY` لازم است. اگر این کلید وجود نداشته باشد، میرزا فقط پرامپت‌های تصویر را ذخیره می‌کند.
+- Python **3.13 or later**
+- The [uv](https://docs.astral.sh/uv/) package manager; dependencies are locked in `uv.lock`
+- An API key for the text model:
+  - `ANTHROPIC_API_KEY` in the default mode
+  - or `GEMINI_API_KEY` when using Google
+- Automatic image generation requires `GEMINI_API_KEY`. If it is not available, Mirza only saves the image prompts.
 
-## نصب و راه‌اندازی
+## Installation and Setup
 
 ```bash
 cd posts/mirza
-uv sync                 # نصب وابستگی‌ها در .venv بر اساس uv.lock
+uv sync                 # Install dependencies into .venv based on uv.lock
 ```
 
-### ۱) تنظیم `.env`
+### 1) Configure `.env`
 
-فایل `mirza/.env` را بساز. مقادیر این فایل نسبت به متغیرهای shell اولویت دارند:
+Create `mirza/.env`. Values in this file take precedence over shell environment variables:
 
 ```dotenv
-# ارائه‌دهنده‌ی مدل متنی: anthropic (پیش‌فرض) یا google
+# Text model provider: anthropic (default) or google
 LLM_PROVIDER=anthropic
 
-# حالت anthropic
+# anthropic mode
 ANTHROPIC_API_KEY=sk-ant-...
-ANTHROPIC_MODEL=claude-sonnet-5          # اختیاری
-# ANTHROPIC_BASE_URL=https://your-proxy  # اختیاری: پراکسی/نقطه‌ی پایانی سازگار
+ANTHROPIC_MODEL=claude-sonnet-5          # optional
+# ANTHROPIC_BASE_URL=https://your-proxy  # optional: compatible proxy/endpoint
 
-# حالت google (نیازمند: uv add langchain-google-genai)
+# google mode (requires: uv add langchain-google-genai)
 # LLM_PROVIDER=google
 # GEMINI_API_KEY=...
 # GEMINI_TEXT_MODEL=gemini-2.5-flash
 
-# تولید تصویر در هر دو حالت — اختیاری
+# Image generation in either mode — optional
 GEMINI_IMAGE_MODEL=gemini-3.1-flash-image-preview
 ```
 
-> مدل متنی از طریق `llm.py` با خروجی JSON ساختاریافته و اعتبارسنجی‌شده با Pydantic کار می‌کند تا با endpointهای سازگار با Anthropic هم به‌درستی قابل استفاده باشد.
+> The text model is accessed through `llm.py` using structured JSON output validated with Pydantic, allowing it to work correctly with Anthropic-compatible endpoints as well.
 
-### ۲) تنظیم پروفایل نویسنده
+### 2) Configure the Writer Profile
 
 ```bash
 cp mirza/.writer.example.py mirza/.writer.py
 ```
 
-حالا `WRITER_PROFILE` را در فایل `.writer.py` ویرایش کن. این فایل در Git نادیده گرفته می‌شود (`git-ignored`).
+Then edit `WRITER_PROFILE` in `.writer.py`. This file is ignored by Git (`git-ignored`).
 
-| کلید                | توضیح                                                                |
-| ------------------- | -------------------------------------------------------------------- |
-| `username`          | نام کاربری دقیق Strapi که در `config.json` ذخیره می‌شود              |
-| `name`              | نام نمایشی نویسنده؛ فقط برای معرفی او به مدل استفاده می‌شود          |
-| `tone`              | لحن کلی نوشته                                                        |
-| `style`             | عادت‌های نگارشی، ساختار جمله‌ها و موارد مشابه                        |
-| `preferred_phrases` | عبارت‌های ترجیحی که مدل به‌شکل محدود و متنوع از آن‌ها استفاده می‌کند |
+| Key | Description |
+| --- | --- |
+| `username` | Exact Strapi username stored in `config.json` |
+| `name` | Display name of the author; used only to introduce the writer to the model |
+| `tone` | Overall writing tone |
+| `style` | Writing habits, sentence structure, and similar preferences |
+| `preferred_phrases` | Preferred phrases that the model uses sparingly and with variation |
 
-> در حالت `mdfy`، مقدارهای `username` و `tone` از `.writer.py` خوانده می‌شوند. در حالت `auto`، این اطلاعات همان ابتدای کار از تو پرسیده می‌شوند. بدون `username`، حالت `mdfy` اجرا نمی‌شود.
+> In `mdfy` mode, `username` and `tone` are read from `.writer.py`. In `auto` mode, this information is requested at the beginning of the workflow. `mdfy` cannot run without a `username`.
 
-## اجرا
+## Running Mirza
 
-### رابط چت وب (پیشنهادی)
+### Web Chat Interface (Recommended)
 
-رابط وب میرزا راست‌چین است و امکاناتی مثل ویرایشگر درون‌خطی متن و منوی سفر در زمان را در اختیارت می‌گذارد.
+Mirza's web interface is right-to-left and includes features such as an inline text editor and a time-travel menu.
 
 ```bash
-# از داخل posts/
+# From inside posts/
 bash mirza/run-chainlit.sh -w
 
-# یا به‌صورت دستی:
+# Or manually:
 cd mirza && .venv/bin/chainlit run chainlit_app.py -w
 ```
 
-بعد از اجرا، مرورگر را روی آدرسی که در ترمینال نمایش داده می‌شود باز کن.
+After starting the app, open the URL printed in the terminal.
 
-به‌صورت پیش‌فرض کافی است متن کامل مقاله را بفرستی تا میرزا آن را در حالت `mdfy` پردازش کند. اگر می‌خواهی مقاله از صفر ساخته شود، دستور `/auto` را بفرست.
+By default, simply send the complete article and Mirza will process it in `mdfy` mode. To generate an article from scratch, send the `/auto` command.
 
-## خروجی و انتشار
+## Output and Publishing
 
-بعد از تأیید نهایی، میرزا این کارها را انجام می‌دهد:
+After final approval, Mirza performs the following steps:
 
-۱. فایل‌های مقاله را در `fa/<topic>/<slug>/` می‌نویسد:
+1. Writes the article files to `fa/<topic>/<slug>/`:
 
 - `config.json`
 - `content.md`
@@ -130,37 +130,37 @@ cd mirza && .venv/bin/chainlit run chainlit_app.py -w
 - `resources/imageThumbnail.png`
 - `resources/IMAGE_PROMPTS.txt`
 
-۲. یک شاخه با نام `draft/<topic>-<slug>` می‌سازد، تغییرات را commit می‌کند و شاخه را روی `origin` push می‌کند.
+2. Creates a branch named `draft/<topic>-<slug>`, commits the changes, and pushes the branch to `origin`.
 
-۳. در پایان، آدرس PR را نمایش می‌دهد:
+3. Finally, it displays the PR URL:
 
 ```text
 https://github.com/gazmeh-site/posts/compare/main...<branch>
 ```
 
-بعد از merge شدن PR، برای انتشار مقاله در Strapi، از داخل `posts/` این دستورها را اجرا کن:
+After the PR is merged, publish the article to Strapi by running the following commands from inside `posts/`:
 
 ```bash
 set -a; source .env; set +a
 python3 add-all-posts-api.py fa/<topic>/<slug>
 ```
 
-## ساختار ماژول‌ها
+## Module Structure
 
-| مسیر                    | نقش                                                                                                    |
-| ----------------------- | ------------------------------------------------------------------------------------------------------ |
-| `config.py`             | مدیریت مسیرها، بارگذاری `.env` و پیکربندی مدل                                                          |
-| `llm.py`                | کلاینت مدل متنی، خروجی JSON ساختاریافته و تولید تصویر با Gemini                                        |
-| `prompts.py`            | پرامپت‌های سیستمی نویسنده، ویراستار، مشخصات و تصویر، به‌همراه واژگان مارک‌داون گزمه                    |
-| `profiles.py`           | بارگذاری `.writer.py` و آماده‌سازی پروفایل نویسنده برای پرامپت                                         |
-| `catalog.py`            | پیمایش `posts/fa`، اعتبارسنجی شناسه‌ها و بررسی تداخل مسیر و تگ                                         |
-| `controller.py`         | `ArticleSession` برای اجرای گراف، توقف‌ها و سفر در زمان؛ `next_command` برای تبدیل تصمیم کاربر به اکشن |
-| `graph/build.py`        | ساخت گراف LangGraph و تعریف نقاط `interrupt_before`                                                    |
-| `graph/nodes.py`        | شش گره‌ی `draft`، `review`، `metadata`، `build`، `images` و `finish`                                   |
-| `graph/state.py`        | تعریف `ArticleState` و اسکیماهای Pydantic                                                              |
-| `graph/git.py`          | ساخت شاخه، commit، push و تولید آدرس PR                                                                |
-| `chainlit_app.py`       | رابط چت راست‌چین Chainlit                                                                              |
-| `ui/`                   | ویرایشگر درون‌خطی متن (`editor.py`) و ویجت‌های تنظیمات (`widgets.py`)                                  |
-| `public/`               | فایل‌های استاتیک Chainlit؛ شامل استایل، RTL، فونت آفلاین Vazirmatn و ویرایشگر                          |
-| `.chainlit/config.toml` | تنظیمات Chainlit، شامل زبان `fa` و CSS/JS سفارشی                                                       |
-| `chainlit_fa.md`        | صفحه‌ی خوش‌آمدگویی فارسی                                                                               |
+| Path | Role |
+| --- | --- |
+| `config.py` | Path management, `.env` loading, and model configuration |
+| `llm.py` | Text-model client, structured JSON output, and image generation with Gemini |
+| `prompts.py` | System prompts for writer, editor, metadata, and images, plus Gazmeh's Markdown vocabulary |
+| `profiles.py` | Load `.writer.py` and prepare the writer profile for prompts |
+| `catalog.py` | Scan `posts/fa`, validate identifiers, and check for path/tag conflicts |
+| `controller.py` | `ArticleSession` for graph execution, checkpoints, and time travel; `next_command` converts user decisions into actions |
+| `graph/build.py` | Build the LangGraph graph and define `interrupt_before` checkpoints |
+| `graph/nodes.py` | Six nodes: `draft`, `review`, `metadata`, `build`, `images`, and `finish` |
+| `graph/state.py` | Define `ArticleState` and Pydantic schemas |
+| `graph/git.py` | Branch creation, commit, push, and PR URL generation |
+| `chainlit_app.py` | Right-to-left Chainlit chat interface |
+| `ui/` | Inline text editor (`editor.py`) and settings widgets (`widgets.py`) |
+| `public/` | Chainlit static assets, including styling, RTL support, offline Vazirmatn font, and editor assets |
+| `.chainlit/config.toml` | Chainlit configuration, including `fa` locale and custom CSS/JS |
+| `chainlit_fa.md` | Persian welcome page |
