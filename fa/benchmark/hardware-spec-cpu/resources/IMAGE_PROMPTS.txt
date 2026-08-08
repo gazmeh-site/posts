@@ -1,5 +1,0 @@
-imageCover.png (cover, 16:9):
-A clean isometric 3D tech illustration of a high-performance enterprise server rack processing complex data streams, with a floating magnifying glass hovering over a glowing CPU core to represent benchmarking and hidden bottleneck detection. The scene features subtle glowing data nodes, abstract performance metrics visualized as floating geometric shapes, and soft shadows. Set against a bright, clean light gray to soft white gradient background. Minimalist geek aesthetic, no text, no watermark, no brand logos, wide 16:9 aspect ratio.
-
-imageThumbnail.png (thumbnail, 1:1):
-A clean isometric 3D illustration of a single, highly detailed abstract CPU chip placed on a small pedestal, radiating glowing performance waves that form a perfect upward trending geometric graph. Simple, iconic composition designed to read perfectly at small sizes. Bright soft white background with soft minimal shadows. Clean tech style, no text, no watermark, no brand logos, square 1:1 aspect ratio.
