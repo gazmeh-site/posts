@@ -1,0 +1,5 @@
+imageCover.png (cover, 16:9):
+A clean isometric tech illustration of a modern CPU processor on a detailed motherboard with abstract data waves, glowing performance charts, and gear icons symbolizing software and hardware optimization, rendered in a vibrant color palette against a soft white to light gray gradient background, no text, no watermark, wide 16:9 aspect ratio.
+
+imageThumbnail.png (thumbnail, 1:1):
+A simple, iconic flat tech illustration of a stylized microchip with a glowing speedometer dial symbolizing performance benchmarking, featuring bold geometric shapes and clean lines on a bright white background, no text, no watermark, square 1:1 aspect ratio.
