@@ -1,7 +1,7 @@
 """Mirza generates Gazmeh blog articles with LangGraph and human review.
 
-Flow (six worker nodes and five human checkpoints):
-    START → draft → review → metadata → build → images → finish → END
+Flow (five worker nodes and five human checkpoints):
+    START → draft → metadata → build → images → finish → END
     interrupt_before = ["draft", "metadata", "build", "images", "finish"]
 
 Run the RTL Chainlit interface from posts/:

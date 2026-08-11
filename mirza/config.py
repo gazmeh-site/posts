@@ -11,6 +11,12 @@ POSTS_DIR = os.path.dirname(PACKAGE_DIR)
 # Treat mirza/.env as authoritative over matching shell variables.
 load_dotenv(os.path.join(PACKAGE_DIR, ".env"), override=True)
 
+# LangSmith auto-traces the LangGraph pipeline when LANGSMITH_TRACING=true and a key is
+# set. If the key is missing, force tracing off so runs don't fail with auth errors
+# before the user fills in LANGSMITH_API_KEY.
+if os.getenv("LANGSMITH_TRACING", "").lower() == "true" and not os.getenv("LANGSMITH_API_KEY"):
+    os.environ["LANGSMITH_TRACING"] = "false"
+
 # Model configuration.
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "anthropic").lower()  # anthropic | google
 ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-5")

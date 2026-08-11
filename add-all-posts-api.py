@@ -1,7 +1,12 @@
 import os
 import sys
 import json
+from pathlib import Path
+from dotenv import load_dotenv
 import requests
+
+env_path = Path(__file__).resolve().parent / ".env"
+load_dotenv(dotenv_path=env_path)
 
 # CONSTANTS
 REPOSITORY = "gazmeh-site/posts"
@@ -24,7 +29,7 @@ USERS_API_URL = f"{BASE_API_URL}/users"
 session = requests.Session()
 _token = os.getenv("STRAPI_TOKEN")
 if _token:
-    session.headers.update({"Authorization": f"Bearer {_token}"})
+    session.headers["Authorization"] = f"Bearer {_token}"
 
 print(f"Target CMS: {BASE_URL}  |  Auth: {'token' if _token else 'none (public)'}\n")
 

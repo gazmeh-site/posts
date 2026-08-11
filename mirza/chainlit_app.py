@@ -23,6 +23,7 @@ import chainlit as cl
 from mirza.config import GEMINI_API_KEY, LLM_PROVIDER
 from mirza.controller import ArticleSession, Jump, Rewind, next_command
 from mirza.profiles import WRITER_TONE, WRITER_USERNAME
+from mirza.streaming import STREAM_END, BodyExtractor
 from mirza.ui.editor import (
     EDIT_TIMEOUT,
     _cleanup_editor_draft,
@@ -30,7 +31,7 @@ from mirza.ui.editor import (
     _ensure_editor_asset,
     _stage_editor_draft,
 )
-from mirza.ui.widgets import _metadata_widgets, _specs_widgets
+from mirza.ui.widgets import _metadata_widgets
 
 log = logging.getLogger("mirza.chat")
 TIMEOUT = 3600  # LLM and image operations can take a while.
@@ -72,6 +73,46 @@ async def _resume(action):
         await cl.make_async(sess.resume)(action)
 
 
+async def _drain_body(queue, msg, extractor):
+    """Render streamed body characters into a Chainlit message as they arrive."""
+    while True:
+        chunk = await queue.get()
+        if chunk is STREAM_END:
+            return
+        display = extractor.feed(chunk)
+        if display:
+            await msg.stream_token(display)
+
+
+async def _run_draft_with_stream(action):
+    """Run the draft step while streaming its body live into the chat.
+
+    The relay is armed only for this step. After the step finishes, the streamed
+    message is finalized with the authoritative draft (so partial / fallback runs
+    still show the correct text) and flagged so ``review_text`` skips a duplicate.
+    """
+    loop = asyncio.get_running_loop()
+    body_q = asyncio.Queue()
+    sess = _session()
+    sess.relay.arm(loop, body_q)
+    msg = cl.Message(content="")
+    extractor = BodyExtractor()
+    drain = asyncio.create_task(_drain_body(body_q, msg, extractor))
+    try:
+        await _resume(action)
+    finally:
+        sess.relay.disarm()
+        body_q.put_nowait(STREAM_END)
+        await drain
+        draft = sess.values().get("draft", "")
+        if draft:
+            # Authoritative overwrite: covers the retry/fallback case where the
+            # partial stream differs from the final accepted draft.
+            msg.content = draft
+            cl.user_session.set("draft_streamed", True)
+        await msg.send()
+
+
 def _ask_text(resp):
     """Extract text from the response shapes returned by AskUserMessage."""
     if resp is None:
@@ -104,7 +145,7 @@ async def on_window_message(data):
 
 
 async def _open_draft_editor(current_draft: str):
-    """Open the inline editor and send its saved draft back through review."""
+    """Open the inline editor and re-extract metadata from the saved draft."""
     edit_id = _stage_editor_draft(current_draft)
     fut = asyncio.get_running_loop().create_future()
     cl.user_session.set("draft_edit_future", fut)
@@ -126,10 +167,11 @@ async def _open_draft_editor(current_draft: str):
         await cl.Message(content="⏱️ متنی دریافت نشد؛ به مرحله‌ی بازبینی برمی‌گردیم.").send()
         await review_text()
         return
-    # Re-run review on the final Markdown; running mdfy again would treat it as raw source.
-    await cl.Message(content="🔍 در حال بازبینیِ متنِ ویرایش‌شده توسط ویراستار…").send()
-    await _resume(Rewind("review", {"draft": text}))
-    await advance()
+    # The edited text is already final Markdown; keep it and re-show text approval.
+    # Metadata is re-extracted when the user approves on the next step.
+    _session().update({"draft": text})
+    await cl.Message(content="✅ متن ویرایش شد؛ آن را بررسی و تأیید کن.").send()
+    await review_text()
 
 
 # Lifecycle.
@@ -152,111 +194,37 @@ async def _start_new_article():
     cl.user_session.set("article_count", n)
     cl.user_session.set("session", ArticleSession(thread_id=f"{sid_base}-{n}"))
     cl.user_session.set("phase", None)
-    cl.user_session.set("specs_back", False)
     await cl.make_async(_session().start)()
     await advance()
 
 
 @cl.on_settings_update
 async def on_settings_update(settings):
+    """Handle metadata edits from the settings form (the only settings phase now)."""
     phase = cl.user_session.get("phase")
-    if phase == "await_metadata":
-        required = ["title", "topic", "slug"]
-        missing = [key for key in required if not (settings.get(key) or "").strip()]
-        if missing:
-            await cl.Message(content="⚠️ این فیلدها اجباری‌اند: " + "، ".join(missing)).send()
-            return
-        tags = settings.get("tags") or []
-        if isinstance(tags, str):
-            tags = [tag.strip() for tag in tags.split(",") if tag.strip()]
-        try:
-            action = next_command({
-                "action": "metadata",
-                "title": (settings.get("title") or "").strip(),
-                "tags": tags,
-                "topic": (settings.get("topic") or "").strip(),
-                "slug": (settings.get("slug") or "").strip(),
-            })
-        except ValueError as exc:
-            await cl.Message(content=f"⚠️ {exc}").send()
-            return
-        cl.user_session.set("phase", None)
-        await _resume(action)
-        await advance()
-        return
+    if phase != "await_metadata":
+        return  # Ignore settings updates outside metadata editing.
 
-    if phase != "await_specs":
-        return  # Ignore settings updates outside the supported phases.
-
-    # Accept either Chainlit's clean value or its displayed Persian label.
-    mode_raw = settings.get("mode") or ""
-    mode = "mdfy" if "mdfy" in mode_raw else "auto"
-    # mdfy extracts metadata; auto still requires initial article specifications.
-    required = ["title", "writer", "topic", "slug"] if mode == "auto" else []
-    missing = [k for k in required if not (settings.get(k) or "").strip()]
+    required = ["title", "topic", "slug"]
+    missing = [key for key in required if not (settings.get(key) or "").strip()]
     if missing:
-        await cl.Message(content="⚠️ این فیلدها اجباری‌اند: " + "، ".join(missing) +
-                         ". لطفاً کامل و دوباره ذخیره کنید.").send()
+        await cl.Message(content="⚠️ این فیلدها اجباری‌اند: " + "، ".join(missing)).send()
         return
-
     tags = settings.get("tags") or []
     if isinstance(tags, str):
-        tags = [t.strip() for t in tags.split(",") if t.strip()]
-    back = bool(cl.user_session.get("specs_back"))
-
-    # Reuse existing mode-specific content when editing specs unless the mode changed.
-    prev = _session().values() if back else {}
-    if mode == "mdfy":
-        if not WRITER_USERNAME:
-            await cl.Message(
-                content="❌ `username` نویسنده در `mirza/.writer.py` تنظیم نشده است."
-            ).send()
-            return
-        content = prev.get("source_text", "")
-        if not content:
-            content = await ask_nonempty(
-                "📝 حالت mdfy: متن کامل مقاله‌ی مبدأ را در کادر پیام paste کن "
-                "(mirza آن را به مارک‌داون جذاب گازمه تبدیل می‌کند):",
-                "متن خالی بود. متن مقاله‌ی مبدأ را دوباره بفرست:",
-            )
-            if content is None:
-                await cl.Message(content="⏱️ متنی نگرفتم؛ دوباره تنظیمات را باز و ذخیره کن.").send()
-                return
-        outline, source_text = "", content
-    else:
-        content = prev.get("outline", "")
-        if not content:
-            content = await ask_nonempty(
-                "📋 سرفصل‌های مقاله را در کادر پیام بنویس (هر سرفصل در یک خط):",
-                "سرفصل خالی بود. سرفصل‌ها را دوباره بفرست:",
-            )
-            if content is None:
-                await cl.Message(content="⏱️ سرفصلی نگرفتم؛ دوباره تنظیمات را باز و ذخیره کن.").send()
-                return
-        outline, source_text = content, ""
-
-    decision = {
-        "action": "back_specs" if back else ("source" if mode == "mdfy" else "specs"),
-        "title": (settings.get("title") or "").strip(),
-        "tags": tags,
-        "writer": WRITER_USERNAME if mode == "mdfy" else (settings.get("writer") or "").strip(),
-        "topic": (settings.get("topic") or "").strip(),
-        "slug": (settings.get("slug") or "").strip(),
-        "outline": outline,
-        "tone": WRITER_TONE if mode == "mdfy" else (settings.get("tone") or "").strip(),
-        "mode": mode,
-        "source_text": source_text,
-    }
-    cl.user_session.set("phase", None)
-    cl.user_session.set("specs_back", False)
-    await cl.Message(
-        content="🪄 در حال تبدیل متن مبدأ به مارک‌داون…" if mode == "mdfy" else "✍️ در حال نگارش مقاله…"
-    ).send()
+        tags = [tag.strip() for tag in tags.split(",") if tag.strip()]
     try:
-        action = next_command(decision)
+        action = next_command({
+            "action": "metadata",
+            "title": (settings.get("title") or "").strip(),
+            "tags": tags,
+            "topic": (settings.get("topic") or "").strip(),
+            "slug": (settings.get("slug") or "").strip(),
+        })
     except ValueError as exc:
         await cl.Message(content=f"⚠️ {exc}").send()
         return
+    cl.user_session.set("phase", None)
     await _resume(action)
     await advance()
 
@@ -351,7 +319,7 @@ async def advance():
         v = sess.values()
 
         if node == "draft":
-            if not v.get("source_text") and not v.get("outline"):
+            if not v.get("source_text"):
                 await present_default_input()
             else:
                 await present_specs()
@@ -377,31 +345,27 @@ async def _done():
     await cl.Message(content="🎉 مقاله آماده شد! فایل‌ها در " + where + " نوشته شدند "
                              "(config.json, content.md, resources/). برای انتشار، پس از merge، "
                              "`add-all-posts-api.py` را اجرا کنید.").send()
-    await cl.Message(content="➡️ برای مقاله‌ی بعدی، حالت پیش‌فرض mdfy است؛ متن را وارد کنید.").send()
+    await cl.Message(content=_session().meter.summary()).send()
+    await cl.Message(content="➡️ برای مقاله‌ی بعدی، متن مقاله‌ی جدید را بفرست.").send()
     await _start_new_article()
 
 
 # Article specifications.
 async def present_default_input():
-    """Accept direct mdfy input; ``/auto`` opens the generation form."""
+    """Accept the source text and run the one-shot conversion."""
     if not WRITER_USERNAME:
         await cl.Message(content="❌ `username` نویسنده در `mirza/.writer.py` تنظیم نشده است.").send()
         return
     source_text = await ask_nonempty(
-        "👋 متن کامل مقاله را بفرست تا در حالت پیش‌فرض **mdfy** تبدیلش کنم. "
-        "برای تولید مقاله از صفر، به‌جای متن `/auto` بفرست.",
-        "متن خالی بود؛ مقاله را دوباره بفرست یا `/auto` را وارد کن:",
+        "👋 متن کامل مقاله را بفرست تا آن را به مارک‌داونِ جذابِ گزمه تبدیل کنم "
+        "(تبدیل وفادار + ویراستاری):",
+        "متن خالی بود؛ متن مقاله را دوباره بفرست:",
     )
     if source_text is None:
         await cl.Message(content="⏱️ متنی دریافت نشد؛ یک گفت‌وگوی جدید شروع کن.").send()
         return
-    if source_text.strip().lower() == "/auto":
-        cl.user_session.set("phase", "await_specs")
-        await cl.ChatSettings(_specs_widgets({"mode": "auto"})).send()
-        await cl.Message(content="حالت auto انتخاب شد؛ مشخصات را تکمیل و ذخیره کن.").send()
-        return
-    await cl.Message(content="🪄 در حال تبدیل متن مبدأ با پروفایل نویسنده…").send()
-    await _resume(next_command({
+    await cl.Message(content="🪄 در حال تبدیل و بازبینی متن مبدأ…").send()
+    await _run_draft_with_stream(next_command({
         "action": "source",
         "source_text": source_text,
         "writer": WRITER_USERNAME,
@@ -411,20 +375,32 @@ async def present_default_input():
 
 
 async def present_specs():
-    """Return to specifications while preserving prior source text or outline."""
-    cl.user_session.set("phase", "await_specs")
-    cl.user_session.set("specs_back", True)
-    await cl.ChatSettings(_specs_widgets(_session().values())).send()
-    await cl.Message(
-        content="↩️ **بازگشت به ورودی مقاله** — حالت را در تنظیمات ذخیره کن؛ "
-                "متن مبدأ یا سرفصل‌های قبلی حفظ شده‌اند."
-    ).send()
+    """Return to source-text entry and re-run the conversion on new text."""
+    source_text = await ask_nonempty(
+        "↩️ **بازگشت به ورودی** — متن مبدأ را دوباره بفرست تا دوباره تبدیل شود:",
+        "متن خالی بود؛ متن مقاله را بفرست:",
+    )
+    if source_text is None:
+        await cl.Message(content="⏱️ متنی دریافت نشد؛ دوباره تلاش کن.").send()
+        return
+    await cl.Message(content="🪄 در حال تبدیل و بازبینی متن جدید…").send()
+    await _run_draft_with_stream(Rewind("draft", {
+        "source_text": source_text,
+        "writer": WRITER_USERNAME,
+        "tone": WRITER_TONE,
+        "change_feedback": "",
+    }))
+    await advance()
 
 
 # Article text review checkpoint.
 async def review_text():
     v = _session().values()
-    await cl.Message(content=v.get("draft", "")).send()
+    # If the draft was just streamed live, that message already shows it; avoid
+    # posting it twice. Reset the flag so the next article / revision re-streams.
+    if not cl.user_session.get("draft_streamed"):
+        await cl.Message(content=v.get("draft", "")).send()
+    cl.user_session.set("draft_streamed", False)
     if v.get("review_notes"):
         await cl.Message(content="**🔍 یادداشت‌های ویراستار:**\n\n" + v["review_notes"]).send()
     res = await cl.AskActionMessage(
@@ -458,7 +434,7 @@ async def review_text():
             await review_text()
             return
         await cl.Message(content="✏️ در حال بازنویسی…").send()
-        await _resume(next_command({"action": "revise_text", "feedback": fb}))
+        await _run_draft_with_stream(next_command({"action": "revise_text", "feedback": fb}))
         await advance()
     elif choice == "back":
         await present_specs()
