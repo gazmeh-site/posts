@@ -1,4 +1,10 @@
 {
-    "imageCover":"./resources/imageCover.png",
-    "imageThumbnail":"./resources/imageThumbnail.png"
+  "imageCover":"./resources/imageCover.png",
+  "imageThumbnail":"./resources/imageThumbnail.png"
+  "vars": {
+    "SITE_URL": "https://gazmeh.ir/fa",
+    "PAGES_URL": "https://gazmeh.ir/fa/pages",
+    "POSTS_URL": "https://gazmeh.ir/fa/posts",
+    "CHAT_LINK": "https://goftino.com/c/wBDyHW"
+  }
 }
