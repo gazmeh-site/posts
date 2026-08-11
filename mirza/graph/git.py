@@ -43,6 +43,6 @@ def create_branch_and_pr(folder_rel: str, title: str, branch: str) -> str:
     try:
         _git(["push", "-u", GITHUB_REMOTE, branch])
     except RuntimeError as exc:
-        print(f"⚠️  push ناموفق (شاخه‌ی محلی ساخته شد):\n{exc}")
+        print(f"⚠️  push failed (local branch was created):\n{exc}")
 
     return f"https://github.com/{repo}/compare/main...{branch}"

@@ -11,6 +11,8 @@ from langgraph.types import Command
 from .catalog import placement_details, scan_post_catalog, validate_identifier
 from .config import POSTS_DIR
 from .graph import build_app
+from .metrics import UsageMeter
+from .streaming import StreamRelay
 
 # Ordered interrupt nodes used by the time-travel menu.
 INTERRUPT_NODES = ("draft", "metadata", "build", "images", "finish")
@@ -42,7 +44,21 @@ class ArticleSession:
 
     def __init__(self, thread_id: str = "article-1"):
         self.app = build_app()
-        self.config = {"configurable": {"thread_id": thread_id}}
+        self.meter = UsageMeter()
+        # Forwards per-token deltas to a live Chainlit preview when armed. It is
+        # disarmed by default and only the draft step arms it.
+        self.relay = StreamRelay()
+        self.config = {
+            "configurable": {"thread_id": thread_id},
+            # Name the whole graph run and tag it so LangSmith groups every node and LLM
+            # call of this article (including across HITL resumes) under one labeled trace.
+            "run_name": "mirza article",
+            "tags": [f"thread:{thread_id}"],
+            "metadata": {"thread_id": thread_id, "app": "mirza"},
+            # The meter counts token usage / time across all HITL resumes of this article.
+            # The relay surfaces streaming tokens to the UI; it is a no-op when disarmed.
+            "callbacks": [self.meter, self.relay],
+        }
 
     def start(self):
         """Run until the first interrupt, immediately before draft."""
@@ -82,6 +98,9 @@ class ArticleSession:
     def rewind_to_before(self, target_node: str, values_patch: Optional[dict] = None):
         """Fork, run the target node again, and stop at the next interrupt."""
         new_cfg = self._fork_before(target_node, values_patch)
+        # Keep the usage meter and stream relay attached so rewound runs count
+        # toward the same totals and (for the draft) still stream live.
+        new_cfg = {**new_cfg, "callbacks": [self.meter, self.relay]}
         self.app.invoke(None, new_cfg)
 
     def jump_to_before(self, target_node: str, values_patch: Optional[dict] = None):
@@ -103,35 +122,27 @@ class ArticleSession:
 
 
 # Map decisions to actions. Approval uses None to avoid a LangGraph 1.2.9 issue
-# with empty Commands. Specs and image actions follow the natural graph path;
-# revisions rewind because backward goto can skip subsequent interrupts.
+# with empty Commands. Source, metadata and image actions follow the natural graph
+# path; revisions rewind because backward goto can skip subsequent interrupts.
 def next_command(decision: dict) -> Action:
     action = decision.get("action")
 
     if action == "approve":
         return None
 
-    if action == "specs":
-        return Command(update=_specs_update(decision))
-
     if action == "source":
         source_text = decision["source_text"].strip()
         if not source_text:
-            raise ValueError("متن مبدأ در حالت mdfy نمی‌تواند خالی باشد.")
+            raise ValueError("متن مبدأ نمی‌تواند خالی باشد.")
         return Command(update={
-            "mode": "mdfy",
             "source_text": source_text,
             "writer": decision.get("writer", ""),
             "tone": decision.get("tone", ""),
-            "outline": "",
             "change_feedback": "",
         })
 
     if action == "revise_text":
         return Rewind("draft", {"change_feedback": decision["feedback"]})
-
-    if action == "back_specs":
-        return Rewind("draft", _specs_update(decision))
 
     if action == "metadata":
         # Show edited metadata at the same checkpoint before allowing build.
@@ -157,27 +168,6 @@ def next_command(decision: dict) -> Action:
         return Jump("images", {"image_specs": "", "image_feedback": ""})
 
     raise ValueError(f"action ناشناخته: {action!r}")
-
-
-def _specs_update(decision: dict) -> dict:
-    mode = decision.get("mode", "mdfy")
-    topic = decision.get("topic", "")
-    slug = decision.get("slug", "")
-    if mode == "auto":
-        topic = validate_identifier(topic, "topic")
-        slug = validate_identifier(slug, "slug")
-    return {
-        "title": decision.get("title", ""),
-        "tags": decision.get("tags", []),
-        "writer": decision.get("writer", ""),
-        "topic": topic,
-        "slug": slug,
-        "outline": decision.get("outline", ""),
-        "tone": decision.get("tone", ""),
-        "change_feedback": "",
-        "mode": mode,
-        "source_text": decision.get("source_text", ""),
-    }
 
 
 def _metadata_update(decision: dict) -> dict:
