@@ -247,9 +247,9 @@ def _wrap(depth: int, name: str, spec: dict, props: dict, lines) -> str:
     """Build one MDC block at ``depth`` colons around ``lines`` (verbatim)."""
     colons = ":" * depth
     body = "\n".join(lines).strip("\n")
-    # Blank lines around the body keep fenced code and lists parsing correctly
-    # inside the container, and are harmless for plain paragraphs.
-    return f"{colons}{name}{_render_props(spec, props)}\n\n{body}\n\n{colons}"
+    # A blank line between the opening marker and a list body makes remark-mdc
+    # treat the list as separate from the container instead of its child.
+    return f"{colons}{name}{_render_props(spec, props)}\n{body}\n{colons}"
 
 
 def render_block(component: Component, lines, props: dict, items=()) -> str:
