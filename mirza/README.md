@@ -4,7 +4,7 @@
 
 Mirza takes a raw draft and, following Gazmeh's blog standards, turns it step by step — with your approval along the way — into a complete, publication-ready article. That includes the Markdown content, article metadata, cover/card images, and finally a PR branch in the `posts` repository.
 
-The workflow includes five human review checkpoints, so at each stage you can approve the result, edit it yourself, ask the AI to revise it, or jump back to an earlier step.
+The workflow includes six human review checkpoints, so at each stage you can approve the result, edit it yourself, ask the AI to revise it, or jump back to an earlier step.
 
 ## What is Mirza?
 
@@ -19,26 +19,27 @@ The workflow includes five human review checkpoints, so at each stage you can ap
 
 ## Flow Graph
 
-Mirza uses a LangGraph graph with **six processing nodes** and **five human review checkpoints**:
+Mirza uses a LangGraph graph with **seven processing nodes** and **six human review checkpoints**:
 
 ```text
-START → draft → review → metadata → build → images → finish → END
+START → draft → enrich_plan → enrich_apply → metadata → build → images → finish → END
 ```
 
 Human checkpoints (`interrupt_before`) occur before:
 
-`draft`, `metadata`, `build`, `images`, and `finish`
+`draft`, `enrich_plan`, `metadata`, `build`, `images`, and `finish`
 
-The `review` node acts as the editor and runs **automatically** immediately after `draft`.
+The `enrich_apply` node is pure Python (no LLM call) and runs **automatically** immediately after `enrich_plan` is approved, splicing the planned visual blocks into the plain draft.
 
 | Step | Review Stage | Node | Responsibility |
 | --- | --- | --- | --- |
 | 1 | Receive article | `draft` | Writer: run `mdfy` for faithful conversion, run `auto` to write from scratch, or rewrite based on feedback |
-| — | — | `review` | Editor: automatically improve the text and provide targeted notes without pausing |
-| 2 | Review article | `metadata` | Determine title, tags, `topic`, and `slug`, and check for path conflicts with existing articles |
-| 3 | Metadata and path | `build` | Create the directory, `config.json`, `content.md`, and `resources/` |
-| 4 | Image mode | `images` | Generate English prompts for the cover image (16:9) and card image (1:1) |
-| 5 | Image prompts | `finish` | Generate image files, save prompts, create the branch, commit, push, and display the PR URL |
+| 2 | Plain-draft approval | `enrich_plan` | Decide which MDC component (note/warning/etc.) covers which line range of the approved plain draft |
+| — | — | `enrich_apply` | Render and splice the planned blocks deterministically; no LLM call, never pauses |
+| 3 | Final text approval | `metadata` | Determine title, tags, `topic`, and `slug`, and check for path conflicts with existing articles |
+| 4 | Metadata and path | `build` | Create the directory, `config.json`, `content.md`, and `resources/` |
+| 5 | Image mode | `images` | Generate English prompts for the cover image (16:9) and card image (1:1) |
+| 6 | Image prompts | `finish` | Generate image files, save prompts, create the branch, commit, push, and display the PR URL |
 
 The graph state is defined in `graph/state.py`, and its checkpointer uses in-memory storage (`MemorySaver`). As a result, each conversation or terminal session has its own independent `thread`.
 
@@ -46,9 +47,7 @@ The graph state is defined in `graph/state.py`, and its checkpointer uses in-mem
 
 - Python **3.13 or later**
 - The [uv](https://docs.astral.sh/uv/) package manager; dependencies are locked in `uv.lock`
-- An API key for the text model:
-  - `ANTHROPIC_API_KEY` in the default mode
-  - or `GEMINI_API_KEY` when using Google
+- An API key for the text model (`MIRZA_API_KEY`, or a legacy `ANTHROPIC_API_KEY` — see below). Every stage goes through [litellm](https://docs.litellm.ai/), so the model can be from any provider it supports, not just Anthropic.
 - Automatic image generation requires `GEMINI_API_KEY`. If it is not available, Mirza only saves the image prompts.
 
 ## Installation and Setup
@@ -63,24 +62,32 @@ uv sync                 # Install dependencies into .venv based on uv.lock
 Create `mirza/.env`. Values in this file take precedence over shell environment variables:
 
 ```dotenv
-# Text model provider: anthropic (default) or google
-LLM_PROVIDER=anthropic
+# Shared defaults for every stage. Model names are litellm "provider/model" strings
+# (e.g. anthropic/claude-sonnet-5, gemini/gemini-2.5-flash) — see https://docs.litellm.ai/docs/providers.
+# A bare name with no "/" is assumed to be Anthropic.
+MIRZA_MODEL=anthropic/claude-sonnet-5
+MIRZA_API_KEY=sk-ant-...
+# MIRZA_API_BASE=https://your-proxy      # optional: compatible proxy/endpoint
+# MIRZA_MAX_TOKENS=32000                 # optional: default is already 32000
 
-# anthropic mode
-ANTHROPIC_API_KEY=sk-ant-...
-ANTHROPIC_MODEL=claude-sonnet-5          # optional
-# ANTHROPIC_BASE_URL=https://your-proxy  # optional: compatible proxy/endpoint
+# Per-stage overrides — every field above (MODEL/API_KEY/API_BASE/MAX_TOKENS) plus
+# TEMPERATURE and EFFORT ("none"|"low"|"medium"|"high") can be set per stage as
+# MIRZA_<STAGE>_<FIELD>, where <STAGE> is DRAFT, ENRICH, METADATA, or IMAGES.
+# draft streams live to the UI and needs no thinking; enrich benefits from thinking
+# since it reasons precisely over line numbers. Defaults already reflect this split
+# (draft/metadata/images: effort=none, enrich: effort=medium) — override only if needed:
+# MIRZA_ENRICH_MODEL=anthropic/claude-opus-5
+# MIRZA_ENRICH_EFFORT=high
+# MIRZA_METADATA_MODEL=gemini/gemini-2.5-flash
 
-# google mode (requires: uv add langchain-google-genai)
-# LLM_PROVIDER=google
-# GEMINI_API_KEY=...
-# GEMINI_TEXT_MODEL=gemini-2.5-flash
-
-# Image generation in either mode — optional
+# Image generation (Gemini only, independent of the text stages above) — optional
+GEMINI_API_KEY=...
 GEMINI_IMAGE_MODEL=gemini-3.1-flash-image-preview
 ```
 
-> The text model is accessed through `llm.py` using structured JSON output validated with Pydantic, allowing it to work correctly with Anthropic-compatible endpoints as well.
+> **Legacy `.env` files** (predating this per-stage config) keep working unchanged: if `MIRZA_MODEL`/`MIRZA_API_KEY`/`MIRZA_API_BASE`/`MIRZA_MAX_TOKENS` are unset, every stage falls back to `ANTHROPIC_MODEL`/`ANTHROPIC_API_KEY`/`ANTHROPIC_BASE_URL` (or `ANTHROPIC_API_URL`)/`ANTHROPIC_MAX_TOKENS`.
+>
+> The text model is accessed through `llm.py` using structured JSON output validated with Pydantic (not forced tool calls), so it works correctly with Anthropic-compatible endpoints as well as other litellm-supported providers.
 
 ### 2) Configure the Writer Profile
 
@@ -149,14 +156,15 @@ python3 add-all-posts-api.py fa/<topic>/<slug>
 
 | Path | Role |
 | --- | --- |
-| `config.py` | Path management, `.env` loading, and model configuration |
-| `llm.py` | Text-model client, structured JSON output, and image generation with Gemini |
-| `prompts.py` | System prompts for writer, editor, metadata, and images, plus Gazmeh's Markdown vocabulary |
-| `profiles.py` | Load `.writer.py` and prepare the writer profile for prompts |
+| `config.py` | Path management, `.env` loading, and the per-stage `StageConfig`/`STAGES` model configuration |
+| `llm.py` | litellm-backed chat client (`ChatLiteLLM`) per stage, structured JSON output, and image generation with Gemini |
+| `prompts.py` | System prompts for writer, enrichment planning, metadata, and images, plus Gazmeh's Markdown vocabulary |
+| `profiles.py` | Load `.writer.py` and prepare the **writer** profile for prompts — distinct from `config.py`'s model configuration, despite the naming similarity |
+| `enrichment.py` | Render/splice MDC blocks from an enrichment plan; validate the resulting Markdown |
 | `catalog.py` | Scan `posts/fa`, validate identifiers, and check for path/tag conflicts |
 | `controller.py` | `ArticleSession` for graph execution, checkpoints, and time travel; `next_command` converts user decisions into actions |
 | `graph/build.py` | Build the LangGraph graph and define `interrupt_before` checkpoints |
-| `graph/nodes.py` | Six nodes: `draft`, `review`, `metadata`, `build`, `images`, and `finish` |
+| `graph/nodes.py` | Seven nodes: `draft`, `enrich_plan`, `enrich_apply`, `metadata`, `build`, `images`, and `finish` |
 | `graph/state.py` | Define `ArticleState` and Pydantic schemas |
 | `graph/git.py` | Branch creation, commit, push, and PR URL generation |
 | `chainlit_app.py` | Right-to-left Chainlit chat interface |

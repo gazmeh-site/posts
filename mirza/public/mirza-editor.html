@@ -8,11 +8,13 @@
 <style>
   :root {
     --bg:#ffffff; --panel:#f8fafc; --border:#e2e8f0; --ink:#1e293b; --muted:#64748b;
+    --primary:#eff6ff; --primary-b:#3b82f6;
+    --secondary:#f5f3ff; --secondary-b:#8b5cf6;
+    --success:#f0fdf4; --success-b:#22c55e;
     --info:#eff6ff; --info-b:#3b82f6;
-    --warn:#fffbeb; --warn-b:#f59e0b;
-    --danger:#fef2f2; --danger-b:#ef4444;
-    --note:#f1f5f9; --note-b:#64748b;
-    --draft:#f5f3ff; --draft-b:#8b5cf6;
+    --warning:#fffbeb; --warning-b:#f59e0b;
+    --error:#fef2f2; --error-b:#ef4444;
+    --neutral:#f1f5f9; --neutral-b:#64748b;
   }
   * { box-sizing:border-box; }
   html, body { height:100%; margin:0; }
@@ -47,27 +49,116 @@
     font-size:14px; line-height:1.95; color:var(--ink); background:var(--bg); direction:rtl;
   }
   .preview { flex:1 1 auto; min-height:0; overflow:auto; padding:14px 18px; line-height:1.95; font-size:14px; }
-  .preview h2 { font-size:18px; margin:18px 0 8px; padding:0; background:none; border:none;
-    text-transform:none; letter-spacing:0; color:var(--ink); }
-  .preview h3 { font-size:16px; margin:14px 0 6px; color:var(--ink); }
+  .preview h1, .preview h2, .preview h3, .preview h4, .preview h5, .preview h6 {
+    margin:18px 0 8px; color:var(--ink);
+  }
+  .preview h2 { font-size:18px; } .preview h3 { font-size:16px; } .preview h4 { font-size:15px; }
   .preview p { margin:8px 0; }
   .preview ul, .preview ol { padding-right:22px; margin:8px 0; }
   .preview code { background:#f1f5f9; padding:1px 5px; border-radius:4px;
-    font-family:ui-monospace,Menlo,monospace; font-size:13px; }
-  .preview pre { background:#0f172a; color:#e2e8f0; padding:12px; border-radius:8px; overflow:auto; }
+    font-family:ui-monospace,Menlo,monospace; font-size:13px; direction:ltr; display:inline-block; }
+  .preview pre { background:#0f172a; color:#e2e8f0; padding:12px; border-radius:8px; overflow:auto; direction:ltr; text-align:left; }
   .preview pre code { background:none; color:inherit; padding:0; }
   .preview blockquote { border-right:3px solid var(--border); margin:8px 0; padding:4px 12px; color:var(--muted); }
   .preview table { border-collapse:collapse; width:100%; margin:10px 0; }
   .preview th, .preview td { border:1px solid var(--border); padding:6px 10px; text-align:right; }
   .preview th { background:var(--panel); }
-  .callout { border-right:4px solid var(--note-b); background:var(--note);
-    padding:10px 14px; border-radius:8px; margin:10px 0; }
-  .callout.info { background:var(--info); border-color:var(--info-b); }
-  .callout.warning { background:var(--warn); border-color:var(--warn-b); }
-  .callout.danger { background:var(--danger); border-color:var(--danger-b); }
-  .callout.note { background:var(--note); border-color:var(--note-b); }
-  .callout.draft { background:var(--draft); border-color:var(--draft-b); }
   .err { color:#ef4444; }
+
+  /* ---- MDC components (structural fidelity, not pixel-perfect) ---- */
+  .mdc-icon { display:inline-flex; width:1em; height:1em; vertical-align:-.15em; margin-left:.35em; flex:none; }
+  .mdc-icon svg { width:100%; height:100%; }
+
+  note, tip, warning, caution, callout {
+    display:block; border-radius:10px; padding:10px 14px; margin:12px 0;
+    border-right:4px solid var(--neutral-b); background:var(--neutral);
+  }
+  note { border-color:var(--info-b); background:var(--info); }
+  tip { border-color:var(--success-b); background:var(--success); }
+  warning { border-color:var(--warning-b); background:var(--warning); }
+  caution, callout[color="error"] { border-color:var(--error-b); background:var(--error); }
+  callout { border-color:var(--primary-b); background:var(--primary); }
+  callout[color="secondary"] { border-color:var(--secondary-b); background:var(--secondary); }
+  callout[color="success"] { border-color:var(--success-b); background:var(--success); }
+  callout[color="warning"] { border-color:var(--warning-b); background:var(--warning); }
+  callout[color="neutral"] { border-color:var(--neutral-b); background:var(--neutral); }
+  callout > p:first-child, note > p:first-child, tip > p:first-child,
+  warning > p:first-child, caution > p:first-child { margin-top:0; }
+  callout > p:last-child, note > p:last-child, tip > p:last-child,
+  warning > p:last-child, caution > p:last-child { margin-bottom:0; }
+  callout[to]::after {
+    content: attr(to); display:block; margin-top:6px; font-size:12px; color:var(--muted); direction:ltr; text-align:left;
+  }
+
+  code-group, code-collapse, code-tree, code-preview {
+    display:block; border:1px solid var(--border); border-radius:10px; overflow:hidden; margin:12px 0;
+  }
+  code-group::before, code-collapse::before, code-tree::before, code-preview::before {
+    display:block; padding:6px 12px; font-size:11px; font-weight:600; color:var(--muted);
+    background:var(--panel); border-bottom:1px solid var(--border);
+  }
+  code-group::before { content:"گروهِ کد"; }
+  code-collapse::before { content:"کدِ تاشو"; }
+  code-tree::before { content:"درختِ فایل‌ها"; }
+  code-preview::before { content:"پیش‌نمایش + کد"; }
+  code-group pre, code-collapse pre, code-tree pre, code-preview pre { margin:0; border-radius:0; }
+  code-group pre + pre, code-tree pre + pre { border-top:1px dashed #334155; }
+
+  steps { display:block; margin:14px 0; padding-right:8px; border-right:2px solid var(--border); }
+  steps > :is(h2,h3,h4,h5,h6) { counter-increment:mdc-step; position:relative; margin:16px 0 6px; }
+  steps { counter-reset:mdc-step; }
+  steps > :is(h2,h3,h4,h5,h6)::before {
+    content:counter(mdc-step); position:absolute; right:-29px; top:0;
+    width:20px; height:20px; border-radius:50%; background:var(--primary-b); color:#fff;
+    font-size:11px; line-height:20px; text-align:center;
+  }
+
+  tabs, accordion { display:block; margin:12px 0; border:1px solid var(--border); border-radius:10px; overflow:hidden; }
+  tabs-item, accordion-item { display:block; border-top:1px solid var(--border); padding:10px 14px; }
+  tabs-item:first-child, accordion-item:first-child { border-top:none; }
+  tabs-item::before, accordion-item::before {
+    content:attr(label); display:block; font-weight:700; font-size:13px; margin-bottom:6px; color:var(--primary-b);
+  }
+
+  collapsible {
+    display:block; margin:12px 0; padding:10px 14px; border:1px dashed var(--border); border-radius:10px; background:var(--panel);
+  }
+  collapsible::before { content:"بخشِ جمع‌شونده"; display:block; font-size:11px; color:var(--muted); margin-bottom:6px; }
+
+  card {
+    display:block; border:1px solid var(--border); border-radius:10px; padding:12px 14px; margin:10px 0;
+  }
+  card[title]::before { content:attr(title); display:flex; align-items:center; font-weight:700; margin-bottom:4px; }
+  card[to]::after { content:attr(to); display:block; margin-top:6px; font-size:12px; color:var(--primary-b); direction:ltr; text-align:left; }
+
+  card-group { display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:10px; margin:12px 0; }
+  card-group card { margin:0; }
+
+  field { display:block; margin:8px 0; padding:8px 12px; border-right:3px solid var(--border); background:var(--panel); border-radius:0 8px 8px 0; }
+  field::before {
+    content:attr(name) " · " attr(type); display:inline-block; font-family:ui-monospace,Menlo,monospace;
+    font-size:12px; font-weight:700; background:#e2e8f0; border-radius:6px; padding:1px 8px; margin-left:6px; direction:ltr;
+  }
+  field[required]::after { content:"الزامی"; font-size:11px; color:var(--error-b); margin-right:6px; }
+  field-group { display:block; margin:12px 0; }
+
+  kbd { display:inline-block; padding:1px 8px; margin:0 2px; border:1px solid var(--border); border-bottom-width:2px;
+    border-radius:6px; background:var(--panel); font-family:ui-monospace,Menlo,monospace; font-size:12px; direction:ltr; }
+
+  badge { display:inline-block; padding:1px 9px; border-radius:999px; background:var(--primary); color:var(--primary-b);
+    border:1px solid var(--primary-b); font-size:12px; font-weight:700; }
+
+  icon { display:inline-flex; }
+
+  prompt { display:block; border:1px solid var(--secondary-b); background:var(--secondary); border-radius:10px; padding:12px 14px; margin:12px 0; }
+  prompt[description]::before { content:attr(description); display:flex; align-items:center; font-weight:700; margin-bottom:6px; color:var(--secondary-b); }
+
+  component-slot { display:block; }
+  component-slot + component-slot { border-top:1px dashed var(--border); margin-top:8px; padding-top:8px; }
+
+  .unknown-component { outline:2px dashed var(--error-b); outline-offset:2px; border-radius:8px; padding:6px; margin:8px 0; }
+  .unknown-flag { display:block; font-size:11px; font-weight:700; color:var(--error-b); margin-bottom:4px; }
+
   @media (max-width: 720px) { .panes { flex-direction:column; } .pane { flex-basis:50%; } }
 </style>
 </head>
@@ -87,6 +178,7 @@
     <div class="preview" id="prev"></div>
   </div>
 </div>
+<script src="mdc-parser.bundle.js"></script>
 <script>
 (function () {
   "use strict";
@@ -95,111 +187,118 @@
   const saveBtn = document.getElementById("save");
   const saved = document.getElementById("saved");
 
-  function esc(s) {
-    return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-  }
-  function inline(s) {
-    s = esc(s);
-    s = s.replace(/`([^`]+)`/g, "<code>$1</code>");
-    s = s.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
-    s = s.replace(/(^|[^*])\*([^*]+)\*/g, "$1<em>$2</em>");
-    s = s.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
-    return s;
-  }
-  const SPECIAL = /^(#{1,3}\s|>\s?|\*\s|\d+\.\s|```|:::|\s*\|)/;
+  // Known custom-element (MDC component) names, populated from the staged JSON.
+  // Includes structural child tags that never appear as top-level entries.
+  let knownComponents = new Set(["tabs-item", "accordion-item", "component-slot"]);
 
-  function render(md) {
-    md = String(md || "").replace(/\r\n/g, "\n");
-    const lines = md.split("\n");
-    const out = [];
-    let i = 0;
-    let listType = null;
-    function closeList() {
-      if (listType) { out.push("</" + (listType === "ul" ? "ul" : "ol") + ">"); listType = null; }
+  // Standard tags remark-rehype produces from Markdown/GFM itself — never
+  // custom components, so never flagged regardless of the (hyphen-less)
+  // component names like `note`/`badge`/`icon` sharing the same shape.
+  const HTML_TAGS = new Set([
+    "p", "a", "strong", "em", "del", "code", "pre", "blockquote", "hr", "br",
+    "img", "span", "div", "h1", "h2", "h3", "h4", "h5", "h6",
+    "ul", "ol", "li", "table", "thead", "tbody", "tr", "th", "td", "input",
+    // SVG elements used by the hand-authored icon set injected in decorateIcons().
+    "svg", "circle", "line", "path",
+  ]);
+
+  // A handful of hand-authored stroke icons, matched loosely by keyword against
+  // the trailing part of an `i-<collection>-<name>` icon identifier. Not a
+  // faithful Iconify rendering — the editor is offline/sandboxed by design.
+  const ICONS = {
+    info: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16"/><circle cx="12" cy="8" r="0.5" fill="currentColor"/></svg>',
+    warning: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l10 18H2L12 3z"/><line x1="12" y1="10" x2="12" y2="14"/><circle cx="12" cy="17" r="0.5" fill="currentColor"/></svg>',
+    check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12l6 6L20 6"/></svg>',
+    link: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 15l6-6"/><path d="M8 17H6a4 4 0 010-8h2"/><path d="M16 7h2a4 4 0 010 8h-2"/></svg>',
+    pen: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20l4-1 11-11-3-3L5 16l-1 4z"/></svg>',
+    book: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5a2 2 0 012-2h13v16H6a2 2 0 00-2 2z"/><path d="M4 19a2 2 0 002 2h13"/></svg>',
+    bulb: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a6 6 0 00-4 10.5c.6.6 1 1.4 1 2.5h6c0-1.1.4-1.9 1-2.5A6 6 0 0012 2z"/></svg>',
+    x: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="5" x2="19" y2="19"/><line x1="19" y1="5" x2="5" y2="19"/></svg>',
+    fallback: '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="4"/></svg>',
+  };
+  function iconSvg(name) {
+    const key = String(name || "").toLowerCase();
+    const rules = [
+      [/info/, ICONS.info],
+      [/warn|alert|triangle|octagon|danger/, ICONS.warning],
+      [/check|success/, ICONS.check],
+      [/^i-lucide-x$|close|x-mark/, ICONS.x],
+      [/link|external/, ICONS.link],
+      [/pen|edit|write/, ICONS.pen],
+      [/book|doc/, ICONS.book],
+      [/bulb|tip|lightbulb/, ICONS.bulb],
+    ];
+    for (const [re, svg] of rules) { if (re.test(key)) return svg; }
+    return ICONS.fallback;
+  }
+
+  const KBD_LABELS = { meta: "⌘", cmd: "⌘", command: "⌘", ctrl: "Ctrl", control: "Ctrl",
+    shift: "Shift", alt: "Alt", option: "⌥", enter: "Enter", return: "Enter", esc: "Esc",
+    escape: "Esc", tab: "Tab", space: "Space", up: "↑", down: "↓", left: "←", right: "→" };
+
+  // MDC's `::: name` legacy 5-name containers (the site's current markdown-it
+  // renderer) predate the new `::name` MDC syntax and are never nested, so a
+  // simple open/close flag (not a full stack) is enough to shim them without
+  // touching real triple-colon nesting produced by tabs/accordion.
+  function shimLegacyContainers(md) {
+    const lines = String(md || "").split("\n");
+    let openLegacy = false;
+    const legacyOpen = /^:::\s*(info|warning|danger|note|draft)\s*$/i;
+    for (let i = 0; i < lines.length; i++) {
+      const m = lines[i].match(legacyOpen);
+      if (m) { lines[i] = "::" + m[1].toLowerCase(); openLegacy = true; continue; }
+      if (openLegacy && /^:::\s*$/.test(lines[i])) { lines[i] = "::"; openLegacy = false; }
     }
-    let m;
-    while (i < lines.length) {
-      const line = lines[i];
-
-      // fenced code block
-      m = line.match(/^```(\w*)\s*$/);
-      if (m) {
-        closeList();
-        const code = [];
-        i++;
-        while (i < lines.length && !/^```\s*$/.test(lines[i])) { code.push(lines[i]); i++; }
-        i++; // closing fence
-        out.push('<pre><code class="lang-' + esc(m[1] || "") + '">' + esc(code.join("\n")) + "</code></pre>");
-        continue;
-      }
-
-      // container ::: name ... :::
-      m = line.match(/^:::\s*(info|warning|danger|note|draft)\s*$/i);
-      if (m) {
-        closeList();
-        const kind = m[1].toLowerCase();
-        const body = [];
-        i++;
-        while (i < lines.length && !/^:::\s*$/.test(lines[i])) { body.push(lines[i]); i++; }
-        i++; // closing :::
-        out.push('<div class="callout ' + kind + '">' + render(body.join("\n")) + "</div>");
-        continue;
-      }
-
-      // GFM table: header | separator | rows
-      if (/^\s*\|/.test(line) && i + 1 < lines.length && /^\s*\|[-:\s|]+\|\s*$/.test(lines[i + 1])) {
-        closeList();
-        const header = line.trim().replace(/^\||\|$/g, "").split("|").map(s => s.trim());
-        i += 2;
-        const rows = [];
-        while (i < lines.length && /^\s*\|/.test(lines[i])) {
-          rows.push(lines[i].trim().replace(/^\||\|$/g, "").split("|").map(s => s.trim()));
-          i++;
-        }
-        let t = "<table><thead><tr>" + header.map(h => "<th>" + inline(h) + "</th>").join("") + "</tr></thead><tbody>";
-        rows.forEach(r => { t += "<tr>" + r.map(c => "<td>" + inline(c) + "</td>").join("") + "</tr>"; });
-        out.push(t + "</tbody></table>");
-        continue;
-      }
-
-      // heading ## / ### (and fallback # )
-      m = line.match(/^(#{2,3})\s+(.*)$/);
-      if (m) { closeList(); out.push("<h" + m[1].length + ">" + inline(m[2]) + "</h" + m[1].length + ">"); i++; continue; }
-      m = line.match(/^#\s+(.*)$/);
-      if (m) { closeList(); out.push("<h2>" + inline(m[1]) + "</h2>"); i++; continue; }
-
-      // blockquote
-      m = line.match(/^>\s?(.*)$/);
-      if (m) {
-        closeList();
-        const bq = [];
-        while (i < lines.length && /^>\s?/.test(lines[i])) { bq.push(lines[i].replace(/^>\s?/, "")); i++; }
-        out.push("<blockquote>" + render(bq.join("\n")) + "</blockquote>");
-        continue;
-      }
-
-      // unordered list
-      m = line.match(/^\*\s+(.*)$/);
-      if (m) { if (listType !== "ul") { closeList(); out.push("<ul>"); listType = "ul"; } out.push("<li>" + inline(m[1]) + "</li>"); i++; continue; }
-
-      // ordered list
-      m = line.match(/^\d+\.\s+(.*)$/);
-      if (m) { if (listType !== "ol") { closeList(); out.push("<ol>"); listType = "ol"; } out.push("<li>" + inline(m[1]) + "</li>"); i++; continue; }
-
-      // blank line
-      if (line.trim() === "") { closeList(); i++; continue; }
-
-      // paragraph: gather consecutive plain lines
-      const buf = [];
-      while (i < lines.length && lines[i].trim() !== "" && !SPECIAL.test(lines[i])) { buf.push(lines[i]); i++; }
-      closeList();
-      out.push("<p>" + inline(buf.join(" ")) + "</p>");
-    }
-    closeList();
-    return out.join("\n");
+    return lines.join("\n");
   }
 
-  function update() { prev.innerHTML = render(src.value); }
+  function decorateIcons(root) {
+    root.querySelectorAll("icon[name]").forEach(function (el) {
+      if (!el.dataset.mdcDone) { el.innerHTML = iconSvg(el.getAttribute("name")); el.dataset.mdcDone = "1"; }
+    });
+    root.querySelectorAll("[icon]").forEach(function (el) {
+      if (el.tagName.toLowerCase() === "icon" || el.querySelector(":scope > .mdc-icon")) return;
+      const span = document.createElement("span");
+      span.className = "mdc-icon";
+      span.innerHTML = iconSvg(el.getAttribute("icon"));
+      el.insertBefore(span, el.firstChild);
+    });
+  }
+
+  function decorateKbd(root) {
+    root.querySelectorAll("kbd[value]").forEach(function (el) {
+      if (el.textContent.trim()) return;
+      const v = el.getAttribute("value") || "";
+      el.textContent = KBD_LABELS[v.toLowerCase()] || v;
+    });
+  }
+
+  function flagUnknown(root) {
+    root.querySelectorAll("*").forEach(function (el) {
+      const tag = el.tagName.toLowerCase();
+      if (HTML_TAGS.has(tag) || knownComponents.has(tag)) return;
+      if (el.classList.contains("unknown-component")) return;
+      el.classList.add("unknown-component");
+      const flag = document.createElement("span");
+      flag.className = "unknown-flag";
+      flag.textContent = "⚠ کامپوننتِ ناشناخته: " + tag;
+      el.insertBefore(flag, el.firstChild);
+    });
+  }
+
+  function update() {
+    const md = shimLegacyContainers(src.value);
+    try {
+      prev.innerHTML = window.MirzaMdc ? window.MirzaMdc.parse(md) : "";
+      if (!window.MirzaMdc) throw new Error("mdc-parser.bundle.js بارگذاری نشد");
+    } catch (e) {
+      prev.innerHTML = '<p class="err">خطا در پردازشِ Markdown: ' + String(e && e.message || e) + "</p>";
+      return;
+    }
+    decorateIcons(prev);
+    decorateKbd(prev);
+    flagUnknown(prev);
+  }
   let t;
   src.addEventListener("input", function () { clearTimeout(t); t = setTimeout(update, 200); });
 
@@ -214,7 +313,11 @@
     if (!id) { update(); return; }
     fetch("/public/mirza-draft-" + encodeURIComponent(id) + ".json")
       .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
-      .then(function (j) { src.value = j.content || ""; update(); })
+      .then(function (j) {
+        src.value = j.content || "";
+        (j.components || []).forEach(function (name) { knownComponents.add(name); });
+        update();
+      })
       .catch(function (e) { prev.innerHTML = '<p class="err">خطا در بارگذاری متن (' + e + "). فایل JSON را در public/ بررسی کن.</p>"; });
   }
   load();

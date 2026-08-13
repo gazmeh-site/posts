@@ -1,7 +1,7 @@
 """Chainlit entry point for Mirza's RTL human-in-the-loop chat interface.
 
-The graph uses interrupts before draft, metadata, build, images, and finish.
-Each browser session owns an independent ArticleSession.
+The graph uses interrupts before draft, enrich_plan, metadata, build, images,
+and finish. Each browser session owns an independent ArticleSession.
 
 Run from posts/:
     bash mirza/run-chainlit.sh -w
@@ -20,10 +20,10 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import chainlit as cl
 
-from mirza.config import GEMINI_API_KEY, LLM_PROVIDER
+from mirza.config import GEMINI_API_KEY, STAGES
 from mirza.controller import ArticleSession, Jump, Rewind, next_command
 from mirza.profiles import WRITER_TONE, WRITER_USERNAME
-from mirza.streaming import STREAM_END, BodyExtractor
+from mirza.streaming import STREAM_END, BodyExtractor, PhaseUpdate
 from mirza.ui.editor import (
     EDIT_TIMEOUT,
     _cleanup_editor_draft,
@@ -66,7 +66,9 @@ async def _resume(action):
     """Run an action in a worker thread so the event loop remains responsive."""
     sess = _session()
     if isinstance(action, Rewind):
-        await cl.make_async(sess.rewind_to_before)(action.target_node, action.values_patch)
+        await cl.make_async(sess.rewind_to_before)(
+            action.target_node, action.values_patch, action.carry_forward
+        )
     elif isinstance(action, Jump):
         await cl.make_async(sess.jump_to_before)(action.target_node, action.values_patch)
     else:
@@ -74,11 +76,19 @@ async def _resume(action):
 
 
 async def _drain_body(queue, msg, extractor):
-    """Render streamed body characters into a Chainlit message as they arrive."""
+    """Render streamed body characters into a Chainlit message as they arrive.
+
+    Also surfaces ``PhaseUpdate`` notices as their own small messages — the draft
+    node keeps working (planning/rendering enrichment) after the body text stops
+    streaming, and without this the UI goes quiet and looks finished mid-step.
+    """
     while True:
         chunk = await queue.get()
         if chunk is STREAM_END:
             return
+        if isinstance(chunk, PhaseUpdate):
+            await cl.Message(content=chunk.text).send()
+            continue
         display = extractor.feed(chunk)
         if display:
             await msg.stream_token(display)
@@ -88,8 +98,9 @@ async def _run_draft_with_stream(action):
     """Run the draft step while streaming its body live into the chat.
 
     The relay is armed only for this step. After the step finishes, the streamed
-    message is finalized with the authoritative draft (so partial / fallback runs
-    still show the correct text) and flagged so ``review_text`` skips a duplicate.
+    message is finalized with the authoritative plain draft (so partial / fallback
+    runs still show the correct text) and flagged so the next review checkpoint
+    skips a duplicate print.
     """
     loop = asyncio.get_running_loop()
     body_q = asyncio.Queue()
@@ -104,7 +115,7 @@ async def _run_draft_with_stream(action):
         sess.relay.disarm()
         body_q.put_nowait(STREAM_END)
         await drain
-        draft = sess.values().get("draft", "")
+        draft = sess.values().get("draft_plain", "")
         if draft:
             # Authoritative overwrite: covers the retry/fallback case where the
             # partial stream differs from the final accepted draft.
@@ -144,41 +155,48 @@ async def on_window_message(data):
         fut.set_result(data.get("content", ""))
 
 
-async def _open_draft_editor(current_draft: str):
-    """Open the inline editor and re-extract metadata from the saved draft."""
+async def _open_draft_editor(current_draft: str, state_key: str = "draft", resume_review=None):
+    """Open the inline editor and return to ``resume_review`` with the edited text saved.
+
+    ``resume_review`` defaults to ``review_text`` via a late lookup (it is defined
+    later in this module, so it cannot be a default-argument expression).
+    """
+    resume_review = resume_review or review_text
     edit_id = _stage_editor_draft(current_draft)
     fut = asyncio.get_running_loop().create_future()
     cl.user_session.set("draft_edit_future", fut)
     await cl.Message(content=_editor_iframe(edit_id)).send()
     await cl.Message(
         content="✏️ متن را در ویرایشگرِ بالا اصلاح کن و **ذخیره و بازگشت** را بزن. "
-                "(متن نهایی لفظی جایگزین می‌شود؛ سپس مشخصات دوباره استخراج می‌شوند.)"
+                "(متن نهایی لفظی جایگزین می‌شود.)"
     ).send()
     try:
         text = await asyncio.wait_for(fut, timeout=EDIT_TIMEOUT)
     except asyncio.TimeoutError:
         await cl.Message(content="⏱️ زمان ویرایش تمام شد؛ تغییرات ذخیره نشد.").send()
-        await review_text()
+        await resume_review()
         return
     finally:
         cl.user_session.set("draft_edit_future", None)
         _cleanup_editor_draft(edit_id)
     if not text:
         await cl.Message(content="⏱️ متنی دریافت نشد؛ به مرحله‌ی بازبینی برمی‌گردیم.").send()
-        await review_text()
+        await resume_review()
         return
-    # The edited text is already final Markdown; keep it and re-show text approval.
-    # Metadata is re-extracted when the user approves on the next step.
-    _session().update({"draft": text})
+    # The edited text is already final Markdown; keep it and re-show the checkpoint.
+    _session().update({state_key: text})
     await cl.Message(content="✅ متن ویرایش شد؛ آن را بررسی و تأیید کن.").send()
-    await review_text()
+    await resume_review()
 
 
 # Lifecycle.
 @cl.on_chat_start
 async def on_chat_start():
-    if LLM_PROVIDER != "google" and not os.getenv("ANTHROPIC_API_KEY"):
-        await cl.Message(content="❌ `ANTHROPIC_API_KEY` در `mirza/.env` پیدا نشد.").send()
+    missing = [name for name, cfg in STAGES.items() if not cfg.api_key]
+    if missing:
+        await cl.Message(
+            content=f"❌ کلید API برای مرحله‌ی {', '.join(missing)} در `mirza/.env` پیدا نشد."
+        ).send()
         return
     if not GEMINI_API_KEY:
         await cl.Message(content="⚠️ `GEMINI_API_KEY` نیست → تصاویر خودکار تولید نمی‌شوند "
@@ -232,10 +250,11 @@ async def on_settings_update(settings):
 # Shared time-travel and restart menu.
 _NODE_LABELS = {
     "draft": "مرحله‌ی ۱ — دریافت مقاله",
-    "metadata": "مرحله‌ی ۲ — بازبینی متن",
-    "build": "مرحله‌ی ۳ — مشخصات و مسیر",
-    "images": "مرحله‌ی ۴ — حالت تصویر",
-    "finish": "مرحله‌ی ۵ — بازبینی پرامپت تصویر",
+    "enrich_plan": "مرحله‌ی ۲ — بازبینیِ متنِ خام",
+    "metadata": "مرحله‌ی ۳ — بازبینیِ نهاییِ متن",
+    "build": "مرحله‌ی ۴ — مشخصات و مسیر",
+    "images": "مرحله‌ی ۵ — حالت تصویر",
+    "finish": "مرحله‌ی ۶ — بازبینیِ پرامپت تصویر",
 }
 
 
@@ -325,6 +344,9 @@ async def advance():
                 await present_specs()
             return
 
+        if node == "enrich_plan":
+            await review_plain_draft()
+            return
         if node == "metadata":
             await review_text()
             return
@@ -346,6 +368,8 @@ async def _done():
                              "(config.json, content.md, resources/). برای انتشار، پس از merge، "
                              "`add-all-posts-api.py` را اجرا کنید.").send()
     await cl.Message(content=_session().meter.summary()).send()
+    models = " · ".join(f"{name}={cfg.model}" for name, cfg in STAGES.items())
+    await cl.Message(content=f"🧠 مدل‌ها: {models}").send()
     await cl.Message(content="➡️ برای مقاله‌ی بعدی، متن مقاله‌ی جدید را بفرست.").send()
     await _start_new_article()
 
@@ -393,6 +417,53 @@ async def present_specs():
     await advance()
 
 
+# Plain-draft review checkpoint (streamed): the first HITL stop after draft,
+# before enrich_plan/enrich_apply run (which are not streamed).
+async def review_plain_draft():
+    v = _session().values()
+    if not cl.user_session.get("draft_streamed"):
+        await cl.Message(content=v.get("draft_plain", "")).send()
+    cl.user_session.set("draft_streamed", False)
+    if v.get("review_notes"):
+        await cl.Message(content="**🔍 یادداشت‌های ویراستار:**\n\n" + v["review_notes"]).send()
+    res = await cl.AskActionMessage(
+        content="**گام ۲/۶ — بازبینیِ متنِ خام:** متن (پیش از غنی‌سازیِ بصری) مورد تایید است؟",
+        actions=[
+            cl.Action(name="approve", payload={"v": "approve"}, label="✅ تایید"),
+            cl.Action(name="edit", payload={"v": "edit"}, label="✏️ ویرایش دستی"),
+            cl.Action(name="revise", payload={"v": "revise"}, label="🔄 اصلاح با هوش مصنوعی"),
+            cl.Action(name="back", payload={"v": "back"}, label="↩️ بازگشت به مشخصات"),
+            *_nav_actions(),
+        ],
+        timeout=TIMEOUT,
+    ).send()
+    if res is None:
+        return
+    choice = res["name"]
+    if await _handle_nav(choice):
+        return
+
+    if choice == "approve":
+        await cl.Message(content="🧩 در حال برنامه‌ریزی و اعمال غنی‌سازیِ بصری…").send()
+        await _resume(None)
+        await advance()
+    elif choice == "edit":
+        await _open_draft_editor(
+            v.get("draft_plain", ""), state_key="draft_plain", resume_review=review_plain_draft
+        )
+    elif choice == "revise":
+        fb = await ask_nonempty("بازخورد اصلاح را بنویس (این دستورالعمل قطعی است):")
+        if not fb:
+            await cl.Message(content="⏱️ بازخوردی نگرفتم؛ به مرحله‌ی بازبینی برمی‌گردیم.").send()
+            await review_plain_draft()
+            return
+        await cl.Message(content="✏️ در حال بازنویسی…").send()
+        await _run_draft_with_stream(next_command({"action": "revise_text", "feedback": fb}))
+        await advance()
+    elif choice == "back":
+        await present_specs()
+
+
 # Article text review checkpoint.
 async def review_text():
     v = _session().values()
@@ -403,12 +474,18 @@ async def review_text():
     cl.user_session.set("draft_streamed", False)
     if v.get("review_notes"):
         await cl.Message(content="**🔍 یادداشت‌های ویراستار:**\n\n" + v["review_notes"]).send()
+    if v.get("enrichment_notes"):
+        await cl.Message(content="**🧩 نقشه‌ی غنی‌سازی:**\n\n" + v["enrichment_notes"]).send()
+    if v.get("enrichment_warnings"):
+        warn_text = "\n".join(f"- {w}" for w in v["enrichment_warnings"])
+        await cl.Message(content="**⚠️ هشدارهای غنی‌سازی:**\n\n" + warn_text).send()
     res = await cl.AskActionMessage(
-        content="**گام ۲/۵ — بازبینی متن:** متن مقاله مورد تایید است؟",
+        content="**گام ۳/۶ — بازبینیِ نهاییِ متن:** متن مقاله مورد تایید است؟",
         actions=[
             cl.Action(name="approve", payload={"v": "approve"}, label="✅ تایید"),
             cl.Action(name="edit", payload={"v": "edit"}, label="✏️ ویرایش دستی"),
             cl.Action(name="revise", payload={"v": "revise"}, label="🔄 اصلاح با هوش مصنوعی"),
+            cl.Action(name="revise_enrich", payload={"v": "revise_enrich"}, label="🧩 بازبینی غنی‌سازی"),
             cl.Action(name="back", payload={"v": "back"}, label="↩️ بازگشت به مشخصات"),
             *_nav_actions(),
         ],
@@ -436,6 +513,15 @@ async def review_text():
         await cl.Message(content="✏️ در حال بازنویسی…").send()
         await _run_draft_with_stream(next_command({"action": "revise_text", "feedback": fb}))
         await advance()
+    elif choice == "revise_enrich":
+        fb = await ask_nonempty("بازخورد بازبینیِ غنی‌سازی را بنویس (مثلاً «کارت‌ها را حذف کن»؛ این دستورالعمل قطعی است):")
+        if not fb:
+            await cl.Message(content="⏱️ بازخوردی نگرفتم؛ به مرحله‌ی بازبینی برمی‌گردیم.").send()
+            await review_text()
+            return
+        await cl.Message(content="🧩 در حال بازبینیِ غنی‌سازی…").send()
+        await _run_draft_with_stream(next_command({"action": "revise_enrich", "feedback": fb}))
+        await advance()
     elif choice == "back":
         await present_specs()
 
@@ -445,7 +531,7 @@ async def review_metadata():
     v = _session().values()
     topic_status = "جدید (پوشه ساخته می‌شود)" if v.get("topic_is_new") else "موجود"
     lines = [
-        "**گام ۳/۵ — مشخصات و مسیر پیشنهادی**",
+        "**گام ۴/۶ — مشخصات و مسیر پیشنهادی**",
         "",
         f"- عنوان: {v.get('title', '')}",
         f"- تگ‌ها: {', '.join(v.get('tags', [])) or '—'}",
@@ -510,7 +596,7 @@ async def review_metadata():
 # Image mode checkpoint.
 async def ask_image_mode():
     res = await cl.AskActionMessage(
-        content="**گام ۴/۵ — حالت تصویر:** تصویر را چطور بسازیم؟",
+        content="**گام ۵/۶ — حالت تصویر:** تصویر را چطور بسازیم؟",
         actions=[
             cl.Action(name="auto", payload={"v": "auto"}, label="🎨 خودکار (بر اساس متن)"),
             cl.Action(name="custom", payload={"v": "custom"}, label="🖌️ توضیح دلخواه"),
@@ -539,7 +625,7 @@ async def review_prompts():
     await cl.Message(content="**🖼️ پرامپت کارت (imageThumbnail.png):**\n\n```\n" +
                              v.get("imagecard_prompt", "") + "\n```").send()
     res = await cl.AskActionMessage(
-        content="**گام ۵/۵ — بازبینی پرامپت‌های تصویر:** مورد تایید است؟",
+        content="**گام ۶/۶ — بازبینیِ پرامپت‌های تصویر:** مورد تایید است؟",
         actions=[
             cl.Action(name="approve", payload={"v": "approve"}, label="✅ تایید و تولید تصویر"),
             cl.Action(name="edit", payload={"v": "edit"}, label="✏️ ویرایش دستی پرامپت‌ها"),

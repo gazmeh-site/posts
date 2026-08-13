@@ -15,14 +15,22 @@ from .metrics import UsageMeter
 from .streaming import StreamRelay
 
 # Ordered interrupt nodes used by the time-travel menu.
-INTERRUPT_NODES = ("draft", "metadata", "build", "images", "finish")
+INTERRUPT_NODES = ("draft", "enrich_plan", "metadata", "build", "images", "finish")
 
 
 @dataclass
 class Rewind:
-    """Rewind before ``target_node``, patch state, and run to the next interrupt."""
+    """Rewind before ``target_node``, patch state, and run to the next interrupt.
+
+    ``carry_forward`` names keys to copy from the CURRENT (latest) state into the
+    forked checkpoint, in addition to ``values_patch``. This is needed because a
+    historical "before target_node" checkpoint predates whatever target_node itself
+    last produced — e.g. forking to "before draft" naturally has no ``draft_plain``,
+    since that field only exists in checkpoints recorded *after* draft has run.
+    """
     target_node: str
     values_patch: dict = field(default_factory=dict)
+    carry_forward: tuple = ()
 
 
 @dataclass
@@ -80,11 +88,14 @@ class ArticleSession:
         """Patch state on the current checkpoint without time travel."""
         self.app.update_state(self.config, values)
 
-    def _fork_before(self, target_node: str, values_patch: Optional[dict] = None):
+    def _fork_before(
+        self, target_node: str, values_patch: Optional[dict] = None, carry_forward: tuple = ()
+    ):
         """Fork the latest checkpoint queued for ``target_node`` and patch it.
 
         Updating a historical checkpoint replaces its values, so merge the full
-        checkpoint state with the patch before updating it.
+        checkpoint state with ``carry_forward`` keys taken from the CURRENT state
+        (see ``Rewind.carry_forward``) and then ``values_patch``, before updating it.
         """
         target_cp = next(
             (h for h in self.app.get_state_history(self.config) if h.next == (target_node,)),
@@ -92,12 +103,16 @@ class ArticleSession:
         )
         if target_cp is None:
             raise RuntimeError(f"checkpointی که قبل از {target_node!r} باشد در تاریخچه پیدا نشد.")
-        merged = {**(target_cp.values or {}), **(values_patch or {})}
+        current = self.values() if carry_forward else {}
+        carried = {key: current[key] for key in carry_forward if key in current}
+        merged = {**(target_cp.values or {}), **carried, **(values_patch or {})}
         return self.app.update_state(target_cp.config, merged)
 
-    def rewind_to_before(self, target_node: str, values_patch: Optional[dict] = None):
+    def rewind_to_before(
+        self, target_node: str, values_patch: Optional[dict] = None, carry_forward: tuple = ()
+    ):
         """Fork, run the target node again, and stop at the next interrupt."""
-        new_cfg = self._fork_before(target_node, values_patch)
+        new_cfg = self._fork_before(target_node, values_patch, carry_forward)
         # Keep the usage meter and stream relay attached so rewound runs count
         # toward the same totals and (for the draft) still stream live.
         new_cfg = {**new_cfg, "callbacks": [self.meter, self.relay]}
@@ -142,7 +157,18 @@ def next_command(decision: dict) -> Action:
         })
 
     if action == "revise_text":
-        return Rewind("draft", {"change_feedback": decision["feedback"]})
+        # carry_forward is required: the "before draft" checkpoint predates draft_plain,
+        # so without it the revision prompt shows an empty "متن فعلی" and the model
+        # rewrites the article from scratch instead of revising it.
+        return Rewind(
+            "draft", {"change_feedback": decision["feedback"]}, carry_forward=("draft_plain",)
+        )
+
+    if action == "revise_enrich":
+        # Re-plan only; the text itself is untouched and re-spliced from draft_plain.
+        return Rewind(
+            "enrich_plan", {"enrich_feedback": decision["feedback"]}, carry_forward=("draft_plain",)
+        )
 
     if action == "metadata":
         # Show edited metadata at the same checkpoint before allowing build.

@@ -1,0 +1,22 @@
+{
+  "name": "mdc-bundle",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Build-time-only tool that bundles a browser-ready MDC-to-HTML parser for the offline mirza-editor.html preview.",
+  "type": "module",
+  "scripts": {
+    "test": "node test.mjs",
+    "build": "esbuild entry.js --bundle --format=iife --global-name=MirzaMdc --platform=browser --outfile=../../public/mdc-parser.bundle.js"
+  },
+  "dependencies": {
+    "unified": "^11.0.5",
+    "remark-parse": "^11.0.0",
+    "remark-gfm": "^4.0.1",
+    "remark-mdc": "^3.11.1",
+    "remark-rehype": "^11.1.2",
+    "rehype-stringify": "^10.0.1"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2"
+  }
+}
