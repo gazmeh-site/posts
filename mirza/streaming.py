@@ -13,6 +13,23 @@ from langchain_core.callbacks import BaseCallbackHandler
 # coroutine knows the stream is over.
 STREAM_END = object()
 
+
+class PhaseUpdate:
+    """A human-readable progress notice pushed onto the relay's queue.
+
+    The draft node is internally multi-phase (convert → plan → render), but only
+    the convert phase streams LLM tokens with a ``body`` field the UI can show live.
+    The later phases run silently from the UI's perspective — the draft text stops
+    updating but the node keeps working — which reads as "finished" when it isn't.
+    Node code calls ``StreamRelay.phase(text)`` between phases so the drain loop can
+    surface a small status message instead of going quiet.
+    """
+
+    __slots__ = ("text",)
+
+    def __init__(self, text: str):
+        self.text = text
+
 # Characters that may sit between a JSON key and its value's opening quote.
 _KV_SKIP = " \t\r\n:"
 
@@ -85,6 +102,36 @@ class StreamRelay(BaseCallbackHandler):
         except RuntimeError:
             # The event loop closed mid-stream; nothing useful left to do.
             pass
+
+    def phase(self, text: str) -> None:
+        """Push a ``PhaseUpdate`` from node code (also runs on the worker thread)."""
+        if not self._armed or self.queue is None or self.loop is None:
+            return
+        try:
+            self.loop.call_soon_threadsafe(self.queue.put_nowait, PhaseUpdate(text))
+        except RuntimeError:
+            pass
+
+
+def emit_phase(config, text: str) -> None:
+    """Print ``text`` and, if a ``StreamRelay`` is armed in ``config``, relay it live.
+
+    Node code calls this instead of a bare ``print`` for progress between the
+    draft node's internal phases, so a Chainlit session mid-draft shows something
+    other than a stalled preview while planning/rendering runs.
+
+    LangGraph wraps the plain ``callbacks`` list passed into ``ArticleSession``
+    into a ``CallbackManager`` before handing ``config`` to node functions, so this
+    accepts either shape: a raw list (as used directly in tests) or an object
+    exposing ``.handlers`` (LangChain's runtime ``CallbackManager``).
+    """
+    print(text)
+    callbacks = (config or {}).get("callbacks", None) or []
+    handlers = callbacks if isinstance(callbacks, list) else getattr(callbacks, "handlers", [])
+    for cb in handlers:
+        if isinstance(cb, StreamRelay):
+            cb.phase(text)
+            break
 
 
 class BodyExtractor:

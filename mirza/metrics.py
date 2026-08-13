@@ -45,7 +45,7 @@ class UsageMeter(BaseCallbackHandler):
         self.input_tokens += int(usage.get("input_tokens", 0) or 0)
         self.output_tokens += int(usage.get("output_tokens", 0) or 0)
 
-    # ChatAnthropic fires on_chat_model_end; some integrations fire on_llm_end.
+    # ChatLiteLLM fires on_chat_model_end; some integrations fire on_llm_end.
     def on_llm_end(self, response, **kwargs):  # noqa: D401
         self._accumulate(response)
 

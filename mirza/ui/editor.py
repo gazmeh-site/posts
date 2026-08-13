@@ -7,13 +7,12 @@ import uuid
 
 from chainlit.config import public_dir
 
+from ..components import COMPONENTS
 
 EDIT_TIMEOUT = 1800
-_EDITOR_SRC = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-    "public",
-    "mirza-editor.html",
-)
+_PUBLIC_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "public")
+_EDITOR_SRC = os.path.join(_PUBLIC_DIR, "mirza-editor.html")
+_BUNDLE_SRC = os.path.join(_PUBLIC_DIR, "mdc-parser.bundle.js")
 
 
 def _stage_editor_draft(content: str) -> str:
@@ -21,7 +20,11 @@ def _stage_editor_draft(content: str) -> str:
     edit_id = uuid.uuid4().hex
     path = os.path.join(public_dir, f"mirza-draft-{edit_id}.json")
     with open(path, "w", encoding="utf-8") as draft_file:
-        json.dump({"content": content}, draft_file, ensure_ascii=False)
+        json.dump(
+            {"content": content, "components": [c.name for c in COMPONENTS.values()]},
+            draft_file,
+            ensure_ascii=False,
+        )
     return edit_id
 
 
@@ -43,20 +46,22 @@ def _editor_iframe(edit_id: str) -> str:
     )
 
 
-def _ensure_editor_asset() -> None:
-    """Copy the editor into Chainlit's served public directory when CWD differs."""
-    target = os.path.join(public_dir, "mirza-editor.html")
-    if os.path.abspath(target) == os.path.abspath(_EDITOR_SRC):
+def _copy_if_stale(source: str, target: str) -> None:
+    if os.path.abspath(target) == os.path.abspath(source):
         return
     try:
         os.makedirs(public_dir, exist_ok=True)
         same = False
         if os.path.isfile(target):
-            with open(_EDITOR_SRC, encoding="utf-8") as source_file, open(
-                target, encoding="utf-8"
-            ) as target_file:
+            with open(source, "rb") as source_file, open(target, "rb") as target_file:
                 same = source_file.read() == target_file.read()
         if not same:
-            shutil.copyfile(_EDITOR_SRC, target)
+            shutil.copyfile(source, target)
     except OSError:
         pass
+
+
+def _ensure_editor_asset() -> None:
+    """Copy the editor and its vendored MDC parser bundle into Chainlit's public dir."""
+    _copy_if_stale(_EDITOR_SRC, os.path.join(public_dir, "mirza-editor.html"))
+    _copy_if_stale(_BUNDLE_SRC, os.path.join(public_dir, "mdc-parser.bundle.js"))

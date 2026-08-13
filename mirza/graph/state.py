@@ -1,6 +1,6 @@
 """State and structured-output schemas for the Mirza article graph."""
 
-from typing import List, TypedDict
+from typing import Dict, List, Literal, TypedDict
 
 from pydantic import BaseModel, Field
 
@@ -29,6 +29,11 @@ class ArticleState(TypedDict, total=False):
     path_exists: bool
     new_tags: List[str]
     slug_alternatives: List[str]
+    draft_plain: str  # Pre-enrichment body; the reference every enrichment revision re-splices from.
+    enrichment_plan: List[dict]  # Serialized EnrichmentItem entries, for checkpoint display.
+    enrichment_notes: str
+    enrichment_warnings: List[str]
+    enrich_feedback: str  # When present, revisions rewind to enrich_plan instead of draft.
 
 
 class ArticleDraft(BaseModel):
@@ -63,3 +68,34 @@ class ArticleMetadata(BaseModel):
 class ImagePrompts(BaseModel):
     image: str = Field(description="پرامپت انگلیسی برای تصویر کاور عریض")
     image_card: str = Field(description="پرامپت انگلیسی برای تصویر کارت/بندانگشتی")
+
+
+class EnrichmentSubItem(BaseModel):
+    """One child of a ``kind="group"`` component, covering part of the parent's range."""
+
+    start_line: int = Field(description="شماره‌ی خطِ شروعِ زیرآیتم، داخلِ بازه‌ی والد")
+    end_line: int = Field(description="شماره‌ی خطِ پایانِ زیرآیتم (شاملِ خودِ خط)")
+    starts_with: str = Field(description="سه تا شش کلمه‌ی اولِ خطِ شروع، عیناً — برای اعتبارسنجی")
+    props: Dict[str, str] = Field(default_factory=dict, description="پراپ‌های زیرآیتم، مثل label")
+
+
+class EnrichmentItem(BaseModel):
+    """A planned block: which component wraps which line range, with what labels.
+
+    The model never writes the block body — ``enrich_apply`` builds it from the raw
+    article lines this range names. ``starts_with`` is a checksum against miscounted
+    line numbers: if it does not match the real line, the block is skipped with a warning.
+    """
+
+    component: str = Field(description="نام کامپوننت MDC، مثل note یا card")
+    start_line: int = Field(description="شماره‌ی خطِ شروعِ بازه در متنِ شماره‌گذاری‌شده (۱-based)")
+    end_line: int = Field(description="شماره‌ی خطِ پایانِ بازه (شاملِ خودِ خط)")
+    starts_with: str = Field(description="سه تا شش کلمه‌ی اولِ خطِ شروع، عیناً از متن — برای اعتبارسنجی")
+    props: Dict[str, str] = Field(default_factory=dict, description="پراپ‌های کوتاه مثل title/label/icon؛ هرگز متنِ بدنه")
+    items: List[EnrichmentSubItem] = Field(default_factory=list, description="فقط برای کامپوننت‌های گروهی")
+    reason: str = Field(description="دلیلِ کوتاهِ فارسیِ انتخابِ این کامپوننت در این نقطه")
+    confidence: Literal["high", "medium", "low"] = Field(description="اطمینان از تناسبِ این انتخاب")
+
+
+class EnrichmentPlan(BaseModel):
+    items: List[EnrichmentItem] = Field(default_factory=list)

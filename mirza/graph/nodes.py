@@ -8,22 +8,35 @@ from langchain_core.runnables import RunnableConfig
 
 from ..catalog import placement_details, resolve_article_folder, scan_post_catalog, validate_identifier
 from ..config import POSTS_DIR
+from ..enrichment import apply_plan, validate_mdc
 from ..llm import generate_image_file, invoke_structured
 from ..profiles import writer_prompt_context
 from ..prompts import (
+    ENRICH_PLAN_SYSTEM,
     IMAGE_SYSTEM,
     METADATA_SYSTEM,
     WRITER_SYSTEM_MDFY,
 )
+from ..streaming import emit_phase
 from .git import create_branch_and_pr
-from .state import ArticleDraft, ArticleMetadata, ArticleState, ImagePrompts
+from .state import (
+    ArticleDraft,
+    ArticleMetadata,
+    ArticleState,
+    EnrichmentItem,
+    EnrichmentPlan,
+    ImagePrompts,
+)
 
 
 def draft(state: ArticleState, config: RunnableConfig) -> dict:
-    """Convert the source text to a polished Gazmeh article (one-shot), or revise it."""
-    is_revision = bool(state.get("change_feedback"))
-    feedback = state.get("change_feedback", "")
+    """Convert the source text to a polished article, or revise it against feedback.
 
+    Enrichment is not this node's business: it produces the plain article body, and
+    ``enrich_plan``/``enrich_apply`` decorate it downstream. An enrichment revision
+    therefore rewinds to ``enrich_plan`` and never re-runs this node at all.
+    """
+    is_revision = bool(state.get("change_feedback"))
     user = (
         f"عنوان: {state.get('title', '')}\n"
         f"موضوع/تاپیک: {state.get('topic', '')}\n"
@@ -33,27 +46,77 @@ def draft(state: ArticleState, config: RunnableConfig) -> dict:
     if is_revision:
         # Focus revisions on the current draft instead of reinjecting the source.
         user += (
-            f"\nمتن فعلی:\n{state.get('draft', '')}\n\n"
-            f"بازخورد اصلاح (این دستورالعمل قطعی است):\n{feedback}\n"
+            f"\nمتن فعلی:\n{state.get('draft_plain') or state.get('draft', '')}\n\n"
+            f"بازخورد اصلاح (این دستورالعمل قطعی است):\n{state['change_feedback']}\n"
         )
         print("✏️  Rewriting the article based on feedback...")
     else:
         user += (
-            "\nمتن مبدأ (این متن را به مارک‌داون جذاب گزمه تبدیل کن — وفادار + غنی‌سازی + ویراستاری):\n"
+            "\nمتن مبدأ (این متن را به مارک‌داون جذاب گزمه تبدیل کن — وفادار + ویراستاری):\n"
             f"{state.get('source_text', '')}\n\n"
         )
         print("🪄  Converting and polishing the source text...")
 
-    result = invoke_structured(0.3, ArticleDraft, [SystemMessage(WRITER_SYSTEM_MDFY), HumanMessage(user)], config=config)
-    notes = "\n".join(f"- {item.strip()}" for item in result.notes if item and item.strip())
+    result = invoke_structured(
+        "draft", ArticleDraft, [SystemMessage(WRITER_SYSTEM_MDFY), HumanMessage(user)], config=config
+    )
     return {
-        "draft": result.body,
+        "draft_plain": result.body,
         "desc": result.desc,
         "title_hint": result.title_hint,
         "keywords": result.keywords,
-        "review_notes": notes,
+        "review_notes": "\n".join(f"- {n.strip()}" for n in result.notes if n and n.strip()),
         "change_feedback": "",
     }
+
+
+def enrich_plan(state: ArticleState, config: RunnableConfig) -> dict:
+    """Decide which MDC component covers which line range of the plain draft.
+
+    The model only ever returns line numbers and short labels — the block itself is
+    built deterministically in ``enrich_apply`` from the article's own lines, so the
+    body text cannot drift and the MDC cannot come back malformed. Line numbers are
+    prefixed onto the text because the plan addresses the article by line.
+    """
+    emit_phase(config, "🧩  در حال برنامه‌ریزیِ غنی‌سازیِ بصری…")
+    base = state.get("draft_plain", "")
+    numbered = "\n".join(f"{i}\t{line}" for i, line in enumerate(base.split("\n"), start=1))
+    plan_user = f"متنِ نهایی (با شماره‌ی خط):\n{numbered}\n"
+    if state.get("enrich_feedback"):
+        plan_user += (
+            f"\nبازخوردِ بازبینیِ غنی‌سازی (این دستورالعمل قطعی است):\n{state['enrich_feedback']}\n"
+        )
+    plan = invoke_structured(
+        "enrich", EnrichmentPlan, [SystemMessage(ENRICH_PLAN_SYSTEM), HumanMessage(plan_user)], config=config
+    )
+
+    notes_lines = []
+    for item in plan.items:
+        note = f"- `{item.component}` خط {item.start_line}–{item.end_line} ({item.confidence}): {item.reason}"
+        labels = " · ".join(f"{k}={v}" for k, v in item.props.items())
+        if labels:
+            note += f" — {labels}"
+        notes_lines.append(note)
+
+    return {
+        "enrichment_plan": [item.model_dump() for item in plan.items],
+        "enrichment_notes": "\n".join(notes_lines),
+        "enrich_feedback": "",
+    }
+
+
+def enrich_apply(state: ArticleState, config: RunnableConfig) -> dict:
+    """Render and splice the planned blocks. No LLM call — pure Python.
+
+    Always re-splices from ``draft_plain`` rather than the previous ``draft``, so
+    repeated enrichment revisions replace the blocks instead of stacking them.
+    """
+    base = state.get("draft_plain", "")
+    items = [EnrichmentItem(**item) for item in state.get("enrichment_plan", [])]
+    if items:
+        emit_phase(config, f"🎨  در حال جای‌گذاریِ {len(items)} بلوکِ غنی‌سازی…")
+    enriched, warnings = apply_plan(base, items)
+    return {"draft": enriched, "enrichment_warnings": warnings + validate_mdc(enriched)}
 
 
 def extract_metadata(state: ArticleState, config: RunnableConfig) -> dict:
@@ -69,7 +132,7 @@ def extract_metadata(state: ArticleState, config: RunnableConfig) -> dict:
         f"خلاصه: {state.get('desc', '')}"
     )
     result = invoke_structured(
-        0.2,
+        "metadata",
         ArticleMetadata,
         [SystemMessage(METADATA_SYSTEM), HumanMessage(user)],
         config=config,
@@ -132,7 +195,7 @@ def images(state: ArticleState, config: RunnableConfig) -> dict:
         user += f"Revision feedback: {state.get('image_feedback')}\n"
 
     print("🎨 Generating image prompts...")
-    result = invoke_structured(0.8, ImagePrompts, [SystemMessage(IMAGE_SYSTEM), HumanMessage(user)], config=config)
+    result = invoke_structured("images", ImagePrompts, [SystemMessage(IMAGE_SYSTEM), HumanMessage(user)], config=config)
     return {"image_prompt": result.image, "imagecard_prompt": result.image_card, "image_feedback": ""}
 
 
