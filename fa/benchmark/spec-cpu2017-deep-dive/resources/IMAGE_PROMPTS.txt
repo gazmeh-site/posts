@@ -1,0 +1,5 @@
+imageCover.png (cover, 16:9):
+A wide isometric illustration of a high-performance laboratory environment featuring a central processing unit undergoing a technical cross-section analysis, surrounded by floating mathematical graphs and data streams representing benchmark tests, rendered in a clean modern flat tech style with soft blue and teal accents, set against a light white to pale gray gradient background, no text, no watermark, wide 16:9 aspect ratio.
+
+imageThumbnail.png (thumbnail, 1:1):
+A clean flat vector illustration of a stylized microprocessor chip with a magnifying glass hovering over it, revealing a glowing core and circuit lines symbolizing optimization and performance metrics, using a minimalist tech style with soft geometric shapes, set against a soft white to light gray background, no text, no watermark, square 1:1 aspect ratio.
