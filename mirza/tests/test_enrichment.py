@@ -36,6 +36,33 @@ class RangeValidationTests(unittest.TestCase):
         self.assertIn("::note", enriched)
         self.assertIn("این متن به مارک‌داون تبدیل می‌شود.", enriched)
 
+    def test_checksum_ignores_list_marker_and_inline_markup(self):
+        """The model quotes what a line *says*, not the Markdown it is wrapped in.
+
+        Regression: every block of an article whose points were numbered/bulleted and
+        bold-labelled was skipped, because `1. **عنوان:**` never startswith `عنوان:`.
+        """
+        base = (
+            "1. **نصب و بارگذاری محیط:** اجرای اسکریپت `install.sh`.\n"
+            "* **مدیریت حافظه:** فعال‌سازی قابلیت `Transparent Huge Pages`.\n"
+            "* `-O3`: به کامپایلر می‌گوید حداکثر زمان را صرف کند."
+        )
+        items = [
+            _item("note", 1, 1, "نصب و بارگذاری محیط: اجرای اسکریپت"),
+            _item("tip", 3, 3, "-O3: به کامپایلر می‌گوید حداکثر زمان"),
+        ]
+        enriched, warnings = apply_plan(base, items)
+        self.assertEqual(warnings, [])
+        self.assertIn("::note", enriched)
+        self.assertIn("::tip", enriched)
+
+    def test_markup_stripping_still_rejects_a_wrong_line(self):
+        """Ignoring formatting must not turn the checksum into a fuzzy match."""
+        base = "* **مدیریت حافظه:** توضیح.\n* **پایداری فرکانس:** توضیح."
+        enriched, warnings = apply_plan(base, [_item("note", 2, 2, "مدیریت حافظه: توضیح")])
+        self.assertEqual(enriched, base)
+        self.assertIn("نمی‌خواند", warnings[0])
+
     def test_out_of_bounds_range_is_rejected(self):
         base = "تنها خط."
         enriched, warnings = apply_plan(base, [_item("note", 1, 9, "تنها خط.")])

@@ -7,8 +7,9 @@ the article's own lines (via ``components.render_block``), and splices it in.
 The model never produces article text, so the body cannot drift and the MDC cannot
 be malformed. What it *can* get wrong is arithmetic — models miscount lines — so
 every item carries a ``starts_with`` checksum that is matched against the real line
-under the same Persian normalization used elsewhere (ZWNJ, Arabic yeh/kaf, digits).
-A mismatch skips that block with a readable warning instead of corrupting the text.
+under Persian normalization (ZWNJ, Arabic yeh/kaf, digits) plus Markdown-markup
+stripping (see ``checksum_key``). A mismatch skips that block with a readable warning
+instead of corrupting the text.
 """
 
 import re
@@ -57,6 +58,27 @@ def normalize(text: str) -> str:
     return "".join(out).strip()
 
 
+_LIST_PREFIX_RE = re.compile(r"^\s*(?:[-*+•]|\d+[.)])\s+")
+# Emphasis, code, heading and quote markers, plus whitespace: all invisible when read.
+_MARKUP_CHARS = str.maketrans("", "", "*_`~#> \t")
+
+
+def checksum_key(text: str) -> str:
+    """Reduce ``text`` to what a reader would say the line *says*, for checksum matching.
+
+    ``starts_with`` is the model quoting a line back from the numbered draft, and it
+    quotes what it reads, not what it parses: a line like ``1. **نصب و بارگذاری:** …``
+    comes back as ``نصب و بارگذاری: …``. That is the right answer to "what does line 74
+    start with" and a wrong answer to ``str.startswith`` — so the checksum compares the
+    prose, dropping the leading list marker and the inline markup characters around it.
+
+    This does not weaken the guard against the failure it exists for. Miscounted line
+    numbers land on *different prose*, which still fails to match; only the formatting
+    the model was never asked to reproduce is ignored.
+    """
+    return normalize(_LIST_PREFIX_RE.sub("", text)).translate(_MARKUP_CHARS)
+
+
 def _safe_excerpt(text: str, limit: int = 40) -> str:
     """Return a Markdown-safe preview of ``text`` for warning messages.
 
@@ -103,10 +125,10 @@ def _check_range(lines: list, start: int, end: int, label: str, bounds=None):
 
 def _check_checksum(lines: list, start: int, starts_with: str, label: str):
     """Verify ``starts_with`` really is the opening of line ``start``; warn if not."""
-    expected = normalize(starts_with or "")
+    expected = checksum_key(starts_with or "")
     if not expected:
         return f"⏭️ بلوکِ «{label}» اضافه نشد: فیلدِ starts_with خالی بود."
-    actual = normalize(lines[start - 1])
+    actual = checksum_key(lines[start - 1])
     if not actual.startswith(expected):
         return (
             f"⏭️ بلوکِ «{label}» اضافه نشد: خطِ {start} با متنِ اعلام‌شده نمی‌خواند "
