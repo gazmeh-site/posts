@@ -3,7 +3,7 @@
 import os
 import runpy
 
-from .config import PACKAGE_DIR
+from ..config import PACKAGE_DIR
 
 
 WRITER_PATH = os.path.join(PACKAGE_DIR, ".writer.py")

@@ -1,6 +1,14 @@
-"""System prompts for Mirza's writer-editor, metadata, and image nodes."""
+"""System prompts for Mirza's writer-editor, metadata, and image nodes.
 
-from .components import component_menu
+Each stage's system prompt is a module-level string. The ``*_messages(ctx)`` render
+functions turn a context dict (built by the node from state + deps) into the final
+``[SystemMessage, HumanMessage]`` list. This separation is the RAG seam: a node can drop
+retrieved chunks into ``ctx["retrieval"]`` (draft) without the prompt strings or the node's
+invocation logic knowing anything about retrieval.
+"""
+from langchain_core.messages import HumanMessage, SystemMessage
+
+from .domain.components import component_menu
 
 WRITER_SYSTEM_MDFY = """تو یک نویسنده-ویراستار ارشد فنی برای وبلاگ گزمه (gazmeh.ir) هستی و به فارسی می‌نویسی.
 
@@ -22,7 +30,6 @@ WRITER_SYSTEM_MDFY = """تو یک نویسنده-ویراستار ارشد فن�
     * هدینگ: `##` (بخش اصلی) و `###` (زیربخش). هرگز `#` (H1) ننویس (عنوان از config می‌آید).
     * متن: پاراگراف، `**bold**`، `*italic*` و بک‌تیک برای اصطلاحات انگلیسی/فنی/کد.
     * لیست: `*` (نشانه‌دار) و `1.` (مرتب/قدم‌به‌قدم).
-    * نقل‌قول: `>` (blockquote).
     * لینک: `[متن](url)`.
     * جدول مارک‌داون برای داده/مقایسه (با ردیف سرتیتر `|`).
     * بلاک کد fencing با زبان: ` ```bash `، ` ```python `، ` ```json ` و غیره.
@@ -46,24 +53,20 @@ ENRICH_PLAN_SYSTEM = """تو مسئولِ غنی‌سازیِ بصریِ یک م
 کامپوننت‌های موجود:
 """ + component_menu() + """
 
-نگاشتِ مفهوم→کامپوننت (راهنما):
-- نکته/راهنمایی مکمل → `note` یا `tip`
-- هشدار/نتیجه‌ی غیرمنتظره‌ی غیربحرانی → `warning`
-- عملِ غیرقابل‌بازگشت یا خطرِ جدی → `caution`
-- هشدارِ سفارشی با آیکن/رنگ یا لینک → `callout`
-- چند بلاکِ کدِ معادلِ پشتِ سرِ هم (npm/pnpm/yarn) → `code-group`
-- بلاک کدِ طولانی (بیش از ~۲۵ خط) → `code-collapse`
-- چند بلاکِ کد از فایل‌های مرتبط با ساختارِ پوشه → `code-tree`
-- چند هدینگِ هم‌سطحِ پشتِ سرِ هم که ترتیبشان مهم است → `steps`
-- چند محتوای موازی و هم‌ارز → `tabs`
-- چند پرسش‌وپاسخِ مستقل → `accordion`
-- بخشِ فرعیِ طولانی که باید پیش‌فرض جمع باشد → `collapsible`
-- یک قطعه‌ی مستقل که باید مثلِ کارت برجسته شود → `card`
-- چند گزینه/منبعِ موازی → `card-group`
-- مستندسازیِ یک پارامتر/آپشن → `field`
-- چند پارامترِ مرتبط → `field-group`
-- برچسبِ کوتاه (نسخه/وضعیت) → `badge`
-- پرامپتِ آماده برای دستیارِ هوشِ مصنوعی → `prompt`
+نگاشتِ مفهوم→کامپوننت (راهنما) — «مثال» در هر سطر، **شکلِ متنی را که باید در خودِ مقاله تشخیص دهی** نشان می‌دهد، نه خروجیِ MDC را.
+
+درون‌خطی:
+- `badge` — برچسبِ کوتاه مثلِ شماره‌ی نسخه یا وضعیت. مثال: «نسخه‌ی ۴» یا «پایدار».
+
+`note`/`tip`/`warning`/`caution` آیکن و رنگِ ثابتِ خودشان را دارند — اصلاً پراپی نمی‌گیرند، هرگز برایشان icon یا color در props ننویس. فقط وقتی آیکن/رنگِ دلخواه یا لینک لازم است از `callout` استفاده کن.
+
+نگاشتِ نوعِ هشدار → icon/color (فقط برای `callout` و `card`؛ دقیقاً از همین جدول استفاده کن، حدس نزن):
+| نوع | icon | color |
+|---|---|---|
+| اطلاعاتی/خنثی | i-lucide-info | info |
+| نکته/راهنماییِ مثبت | i-lucide-lightbulb | success |
+| هشدار/احتیاطِ غیربحرانی | i-lucide-triangle-alert | warning |
+| خطا/عملِ غیرقابل‌بازگشت | i-lucide-circle-x | error |
 
 بودجه‌ی تراکم (رعایتِ اکید):
 - حداکثر یک بلوک به ازای هر ~۱۵۰ کلمه‌ی متن.
@@ -76,7 +79,7 @@ ENRICH_PLAN_SYSTEM = """تو مسئولِ غنی‌سازیِ بصریِ یک م
 - پاراگرافِ کوتاهِ مستقل (کمتر از ۴۰ کلمه).
 - جایی که یک لیستِ ساده کافی‌ست.
 - نتیجه‌گیریِ پایانی.
-- هر بلوکی که صرفاً «قشنگ» است و ارزشِ ساختاری/خوانایی اضافه نمی‌کند.
+- هر بلوکی که صرفاً «زیبا» است و ارزشِ ساختاری/خوانایی اضافه نمی‌کند.
 
 برای هر آیتمِ برنامه:
 - `start_line` و `end_line`: بازه‌ی خط (۱-based و شاملِ هر دو سر) دقیقاً از روی شماره‌هایی که در ورودی می‌بینی. بازه باید یک **واحدِ معناییِ کامل** باشد: یک پاراگرافِ کامل، یک لیستِ کامل، یک جدولِ کامل (با ردیفِ سرتیتر)، یا یک بلاکِ کدِ کامل (از خطِ ``` بازکننده تا خطِ ``` بسته‌شونده).
@@ -120,3 +123,71 @@ Specifics:
 
 If the user provided custom image specs/style, incorporate them. If revision feedback is given, apply it. Make the two prompts visually distinct.
 """
+
+
+# --- Prompt render functions -------------------------------------------------
+#
+# Nodes build a ``ctx`` dict from state (+ deps) and call one of these. Keeping message
+# assembly OUT of the nodes means a node never formats a prompt by hand, and retrieved
+# context (RAG) can be injected by just populating ``ctx["retrieval"]``.
+
+
+def draft_messages(ctx: dict) -> list:
+    """Writer-editor prompt. ``ctx`` may carry ``retrieval`` (joined RAG chunks).
+
+    In revision mode (``is_revision``) the focus is the current draft + feedback rather
+    than the original source text.
+    """
+    user = (
+        f"عنوان: {ctx.get('title', '')}\n"
+        f"موضوع/تاپیک: {ctx.get('topic', '')}\n"
+        f"لحن: {ctx.get('tone', '')}\n"
+        f"\nپروفایل نویسنده:\n{ctx.get('writer', '')}\n"
+    )
+    retrieval = ctx.get("retrieval")
+    if retrieval:
+        user += f"\nزمینه‌ی تکمیلی از پایگاه دانش:\n{retrieval}\n"
+    if ctx.get("is_revision"):
+        user += (
+            f"\nمتن فعلی:\n{ctx.get('current', '')}\n\n"
+            f"بازخورد اصلاح (این دستورالعمل قطعی است):\n{ctx['feedback']}\n"
+        )
+    else:
+        user += (
+            "\nمتن مبدأ (این متن را به مارک‌داون جذاب گزمه تبدیل کن — وفادار + ویراستاری):\n"
+            f"{ctx.get('source_text', '')}\n\n"
+        )
+    return [SystemMessage(WRITER_SYSTEM_MDFY), HumanMessage(user)]
+
+
+def enrich_plan_messages(ctx: dict) -> list:
+    """Enrichment-planner prompt. The article is addressed by line number."""
+    user = f"متنِ نهایی (با شماره‌ی خط):\n{ctx['numbered_text']}\n"
+    if ctx.get("feedback"):
+        user += f"\nبازخوردِ بازبینیِ غنی‌سازی (این دستورالعملِ قطعی است):\n{ctx['feedback']}\n"
+    return [SystemMessage(ENRICH_PLAN_SYSTEM), HumanMessage(user)]
+
+
+def metadata_messages(ctx: dict) -> list:
+    """Metadata prompt. Only compact draft signals + the catalog are sent, never the body."""
+    user = (
+        f"فهرست فعلی مخزن:\n{ctx['catalog_json']}\n\n"
+        f"عنوان پیشنهادی: {ctx.get('title_hint', '')}\n"
+        f"کلمات کلیدی: {', '.join(ctx.get('keywords', []))}\n"
+        f"خلاصه: {ctx.get('desc', '')}"
+    )
+    return [SystemMessage(METADATA_SYSTEM), HumanMessage(user)]
+
+
+def images_messages(ctx: dict) -> list:
+    """Art-director prompt for the two English text-to-image prompts."""
+    user = (
+        f"Title: {ctx.get('title', '')}\n"
+        f"Topic: {ctx.get('topic', '')}\n"
+        f"Summary: {ctx.get('desc', '')}\n"
+    )
+    if ctx.get("image_mode") == "custom" and ctx.get("image_specs"):
+        user += f"User custom image specs/style: {ctx['image_specs']}\n"
+    if ctx.get("feedback"):
+        user += f"Revision feedback: {ctx['feedback']}\n"
+    return [SystemMessage(IMAGE_SYSTEM), HumanMessage(user)]

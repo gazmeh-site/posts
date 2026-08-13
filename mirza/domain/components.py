@@ -7,7 +7,7 @@ block from verbatim article lines. Because the model never writes MDC syntax its
 unbalanced ``::`` and unknown components are structurally impossible.
 
 The Chainlit editor's known-component list (via ``ui/editor.py``) also reads
-``COMPONENTS``. Source: ~/nuxt-content-mdc-llms.txt.
+``COMPONENTS``.
 """
 
 import re
@@ -18,6 +18,7 @@ COLOR_ENUM = frozenset({
     "primary", "secondary", "success", "info", "warning", "error", "neutral",
 })
 ICON_RE = re.compile(r"^i-[a-z0-9]+(?:-[a-z0-9]+)+$")
+_STEP_LEVEL_ENUM = frozenset({"2", "3", "4"})
 
 # Each prop maps to a value kind that decides both how it is validated and how it is
 # serialized: "color" against COLOR_ENUM, "icon" against ICON_RE, "bool" as a bare
@@ -40,7 +41,8 @@ class Component:
     ``kind`` drives rendering:
     - ``wrapper``  — the planned line range goes verbatim inside one block.
     - ``group``    — the range is partitioned into sub-ranges, each wrapped in
-      ``item_component``; the parent is rendered one nesting level deeper.
+      ``item_component``; the children are rendered one nesting level deeper than
+      their parent (matching remark-mdc's ``::`` → ``:::`` convention).
     - ``inline``   — a standalone ``:name{}`` mark with no body.
 
     ``plannable`` is False for components the deterministic renderer cannot place
@@ -48,6 +50,11 @@ class Component:
     ``code-preview`` needs a ``#code`` slot split that only a human can decide).
     They stay in the catalog so ``validate_mdc`` and the manual editor still know
     them — a writer may add them by hand.
+
+    ``hidden_props`` names props that are present in ``props`` (so they are still
+    validated and rendered) but left out of ``component_menu()`` — for values the
+    planner should never be asked for because they are filled in automatically
+    (e.g. ``steps.level``, computed from the article's own headings).
     """
 
     name: str
@@ -59,31 +66,28 @@ class Component:
     item_component: str = ""
     item_props: dict = field(default_factory=dict)
     plannable: bool = True
+    hidden_props: frozenset = field(default_factory=frozenset)
 
 
 COMPONENTS: dict[str, Component] = {
     "note": Component(
         name="note", category="هشدار", kind="wrapper",
         when="نکته یا اطلاعاتِ اضافی که مکملِ متنِ اطراف است.",
-        props={"icon": "icon"},
         max_per_article=4,
     ),
     "tip": Component(
         name="tip", category="هشدار", kind="wrapper",
         when="پیشنهاد یا راهنماییِ مفید.",
-        props={"icon": "icon"},
         max_per_article=4,
     ),
     "warning": Component(
         name="warning", category="هشدار", kind="wrapper",
         when="احتیاط یا نتیجه‌ی غیرمنتظره‌ی احتمالی (غیربحرانی).",
-        props={"icon": "icon"},
         max_per_article=3,
     ),
     "caution": Component(
         name="caution", category="هشدار", kind="wrapper",
         when="عملِ غیرقابل‌بازگشت یا خطرِ جدی.",
-        props={"icon": "icon"},
         max_per_article=2,
     ),
     "callout": Component(
@@ -117,7 +121,11 @@ COMPONENTS: dict[str, Component] = {
     "steps": Component(
         name="steps", category="چیدمان", kind="wrapper",
         when="بازه‌ای که از چند هدینگِ هم‌سطحِ پشتِ سرِ هم تشکیل شده و ترتیبشان مهم است.",
-        props={"level": "text"},
+        # level is computed automatically in apply_plan from the headings inside the
+        # planned range — never asked of the model — but still validated/rendered
+        # if a plan somehow supplies one (e.g. from a hand-edited draft).
+        props={"level": "step-level"},
+        hidden_props=frozenset({"level"}),
         max_per_article=1,
     ),
     "tabs": Component(
@@ -211,6 +219,9 @@ def validate_props(spec: dict, props: dict, label: str) -> tuple:
         if kind == "icon" and not ICON_RE.match(text):
             warnings.append(f"آیکنِ نامعتبرِ «{text}» در «{label}» نادیده گرفته شد.")
             continue
+        if kind == "step-level" and text not in _STEP_LEVEL_ENUM:
+            warnings.append(f"levelِ نامعتبرِ «{text}» در «{label}» نادیده گرفته شد.")
+            continue
         if kind == "bool":
             if text.lower() in _TRUTHY:
                 clean[key] = True
@@ -245,31 +256,49 @@ def render_block(component: Component, lines, props: dict, items=()) -> str:
     """Render ``component`` around verbatim article ``lines``.
 
     ``items`` is only used for ``kind="group"``: a sequence of ``(sub_lines, sub_props)``
-    pairs, each becoming one ``item_component`` child. The parent renders one nesting
-    level deeper than its children, so the colon depths can never disagree.
+    pairs, each becoming one ``item_component`` child. Children render one nesting level
+    deeper than their parent — MDC/remark-mdc's convention is fewer colons on the
+    outside, more colons on the inside (``::hero`` wrapping ``:::card``) — so the colon
+    depths can never disagree.
     """
     if component.kind == "group":
         children = [
-            _wrap(2, component.item_component, component.item_props, sub_props, sub_lines)
+            _wrap(3, component.item_component, component.item_props, sub_props, sub_lines)
             for sub_lines, sub_props in items
         ]
-        return _wrap(3, component.name, component.props, props, "\n\n".join(children).split("\n"))
+        return _wrap(2, component.name, component.props, props, "\n\n".join(children).split("\n"))
     return _wrap(2, component.name, component.props, props, lines)
 
 
+def _prop_hint(key: str, kind: str) -> str:
+    """Describe one prop's allowed values, not just its name — so the model doesn't guess."""
+    if kind == "color":
+        return f"{key} (یکی از: {'|'.join(sorted(COLOR_ENUM))})"
+    if kind == "icon":
+        return f"{key} (فرمتِ i-lucide-xxx، مثلِ i-lucide-info)"
+    return key
+
+
 def component_menu() -> str:
-    """Compact menu of plannable components: name, category, when, and prop names."""
+    """Compact menu of plannable components: name, category, when, and prop hints.
+
+    ``hidden_props`` are validated/rendered but never listed here — they are values
+    the planner should never be asked for (e.g. ``steps.level``, computed elsewhere).
+    """
     lines = []
     for c in COMPONENTS.values():
         if not c.plannable:
             continue
         entry = f"- `{c.name}` ({c.category}): {c.when}"
-        if c.props:
-            entry += f" — پراپ‌ها: {', '.join(c.props)}"
+        visible_props = {k: v for k, v in c.props.items() if k not in c.hidden_props}
+        if visible_props:
+            hints = ", ".join(_prop_hint(k, v) for k, v in visible_props.items())
+            entry += f" — پراپ‌ها: {hints}"
         if c.kind == "group":
+            item_hints = ", ".join(_prop_hint(k, v) for k, v in c.item_props.items())
             entry += (
                 f" — گروهی: بازه به زیرآیتم‌های `{c.item_component}` تقسیم می‌شود"
-                f" (پراپ‌های هر زیرآیتم: {', '.join(c.item_props)})"
+                f" (پراپ‌های هر زیرآیتم: {item_hints})"
             )
         lines.append(entry)
     return "\n".join(lines)

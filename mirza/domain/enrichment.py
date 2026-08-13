@@ -61,6 +61,9 @@ def normalize(text: str) -> str:
 _LIST_PREFIX_RE = re.compile(r"^\s*(?:[-*+•]|\d+[.)])\s+")
 # Emphasis, code, heading and quote markers, plus whitespace: all invisible when read.
 _MARKUP_CHARS = str.maketrans("", "", "*_`~#> \t")
+# A leading `**bold title:**`-style run the model may have pulled into a `title`/`label`
+# prop, then quoted `starts_with` from the remainder of the line — see _check_checksum.
+_BOLD_PREFIX_RE = re.compile(r"^\*\*[^*]+\*\*\s*")
 
 
 def checksum_key(text: str) -> str:
@@ -93,6 +96,23 @@ def _safe_excerpt(text: str, limit: int = 40) -> str:
 
 
 _FENCE_RE = re.compile(r"^\s*```")
+_HEADING_RE = re.compile(r"^(#{2,4})\s+\S")
+_DEFAULT_STEPS_LEVEL = "3"
+
+
+def _detect_steps_level(lines: list) -> str:
+    """Infer the ``steps`` ``level`` prop from the first heading inside the range.
+
+    ``level`` picks which heading depth the component treats as a step boundary; the
+    article itself already says this (whatever ``##``/``###``/``####`` its headings use),
+    so it is computed here instead of asked of the model — an arithmetic detail the
+    model has no reason to get right when the text already answers it.
+    """
+    for line in lines:
+        m = _HEADING_RE.match(line)
+        if m:
+            return str(len(m.group(1)))
+    return _DEFAULT_STEPS_LEVEL
 
 
 def _fence_open_before(lines: list, index: int) -> bool:
@@ -124,17 +144,26 @@ def _check_range(lines: list, start: int, end: int, label: str, bounds=None):
 
 
 def _check_checksum(lines: list, start: int, starts_with: str, label: str):
-    """Verify ``starts_with`` really is the opening of line ``start``; warn if not."""
+    """Verify ``starts_with`` really is the opening of line ``start``; warn if not.
+
+    The model sometimes pulls a leading ``**bold title:**`` into a ``title``/``label``
+    prop and then quotes ``starts_with`` from the remainder of the line — a correct
+    reading of the line that fails a plain ``startswith`` check. Before rejecting, also
+    try matching against the line with that leading bold run stripped entirely.
+    """
     expected = checksum_key(starts_with or "")
     if not expected:
         return f"⏭️ بلوکِ «{label}» اضافه نشد: فیلدِ starts_with خالی بود."
-    actual = checksum_key(lines[start - 1])
-    if not actual.startswith(expected):
-        return (
-            f"⏭️ بلوکِ «{label}» اضافه نشد: خطِ {start} با متنِ اعلام‌شده نمی‌خواند "
-            f"(انتظار: «{_safe_excerpt(starts_with)}» / واقعی: «{_safe_excerpt(lines[start - 1])}»)."
-        )
-    return None
+    line = lines[start - 1]
+    if checksum_key(line).startswith(expected):
+        return None
+    after_bold = _BOLD_PREFIX_RE.sub("", line, count=1)
+    if after_bold != line and checksum_key(after_bold).startswith(expected):
+        return None
+    return (
+        f"⏭️ بلوکِ «{label}» اضافه نشد: خطِ {start} با متنِ اعلام‌شده نمی‌خواند "
+        f"(انتظار: «{_safe_excerpt(starts_with)}» / واقعی: «{_safe_excerpt(line)}»)."
+    )
 
 
 def _build_group_items(component, lines: list, item, warnings: list):
@@ -203,6 +232,8 @@ def apply_plan(base: str, items: list) -> tuple:
 
         clean, prop_warnings = validate_props(component.props, item.props, component.name)
         warnings.extend(prop_warnings)
+        if component.name == "steps":
+            clean["level"] = _detect_steps_level(lines[item.start_line - 1:item.end_line])
 
         sub_items = ()
         if component.kind == "group":

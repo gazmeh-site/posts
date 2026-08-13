@@ -1,6 +1,6 @@
 import unittest
 
-from mirza.enrichment import apply_plan, validate_mdc
+from mirza.domain.enrichment import apply_plan, validate_mdc
 from mirza.graph import EnrichmentItem, EnrichmentSubItem
 
 
@@ -168,11 +168,16 @@ class ApplyPlanTests(unittest.TestCase):
         ]
         enriched, warnings = apply_plan(base, items)
         self.assertEqual(warnings, [])
-        # The parent nests one level deeper than its children, so depths cannot disagree.
-        self.assertIn(":::tabs", enriched)
-        self.assertIn('::tabs-item{label="یک"}', enriched)
-        self.assertIn('::tabs-item{label="دو"}', enriched)
+        # Parent renders at the outer (shallower) depth, children one level deeper —
+        # matching remark-mdc's own "::hero" wrapping ":::card" convention.
+        lines = enriched.split("\n")
+        self.assertIn("::tabs", lines)
+        self.assertNotIn(":::tabs", lines)
+        self.assertIn(':::tabs-item{label="یک"}', enriched)
+        self.assertIn(':::tabs-item{label="دو"}', enriched)
         self.assertLess(enriched.index('label="یک"'), enriched.index('label="دو"'))
+        # The parent's own closing fence is bare "::", not the children's "::::".
+        self.assertEqual(lines[-1], "::")
         # Machine-rendered output is structurally valid by construction.
         self.assertEqual(validate_mdc(enriched), [])
 

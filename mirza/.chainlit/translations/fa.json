@@ -99,8 +99,8 @@
     },
     "messages": {
       "status": {
-        "using": "در حال استفاده از",
-        "used": "استفاده‌شده"
+        "using": "",
+        "used": ""
       },
       "actions": {
         "copy": {
