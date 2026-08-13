@@ -1,0 +1,5 @@
+imageCover.png (cover, 16:9):
+A wide isometric technical illustration of a central high-performance CPU chip architecture, surrounded by floating holographic graphs, data streams, and geometric shapes representing benchmark testing and performance analysis layers. The style is modern geek tech with clean flat vector art, utilizing a palette of tech blues, purples, and silhouettes. Set against a light soft white to light gray gradient background. No text, no watermark, high quality, wide aspect ratio.
+
+imageThumbnail.png (thumbnail, 1:1):
+A clean flat style vector illustration of a stylized CPU processor with a magnifying glass floating above it, revealing binary code and optimization gears inside. The design is iconic and minimal, suitable for a small thumbnail, with a soft tech blue and white color scheme. Set against a light soft white to light gray gradient background. No text, no watermark, high quality, square aspect ratio.
