@@ -1,0 +1,5 @@
+imageCover.png (cover, 16:9):
+An isometric wide illustration of a complex server room architecture featuring a central multi-core CPU glowing with internal circuitry, connected to floating abstract data streams and measurement gauges representing benchmarking logic. Clean flat tech style, soft white to light gray gradient background, no text, no watermark, wide aspect ratio.
+
+imageThumbnail.png (thumbnail, 1:1):
+A simple iconic square illustration of a stylized microchip with a magnifying glass hovering over it, revealing a bright internal mathematical graph. Clean flat tech style, soft white to light gray gradient background, no text, no watermark, 1:1 aspect ratio.
