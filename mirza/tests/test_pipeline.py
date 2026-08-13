@@ -3,8 +3,9 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from mirza import controller
-from mirza.controller import ArticleSession, Jump, Rewind, next_command
+from mirza.runtime import decisions
+from mirza.runtime.decisions import Jump, Rewind, next_command
+from mirza.runtime.session import ArticleSession
 from mirza.graph import (
     ArticleDraft,
     ArticleMetadata,
@@ -12,10 +13,49 @@ from mirza.graph import (
     EnrichmentPlan,
 )
 from mirza.graph import nodes
+from mirza.infra.retrieval import NoopRetriever
+from mirza.runtime.deps import Deps
 
-# enrich_plan always runs after draft (a second invoke_structured call); tests that
+# enrich_plan always runs after draft (a second complete_structured call); tests that
 # don't care about enrichment answer with an empty plan so no blocks get spliced in.
 _EMPTY_PLAN = EnrichmentPlan(items=[])
+
+
+class _FakeLLM:
+    """Stands in for the injected ModelClient: records nothing, delegates to ``fn``.
+
+    ``fn`` keeps the historical signature ``(stage, schema, messages, retries, config)`` so
+    the per-test fakes below are unchanged from before the DI refactor.
+    """
+
+    def __init__(self, fn=None):
+        self._fn = fn
+
+    def complete_structured(self, stage, schema, messages, *, config=None):
+        if self._fn is None:
+            raise AssertionError(f"unexpected llm call: stage={stage} schema={schema}")
+        return self._fn(stage, schema, messages, retries=1, config=config)
+
+
+class _NoopImages:
+    def generate(self, *args, **kwargs):  # noqa: ARG002
+        return False
+
+
+def _deps(posts_dir, invoke_fn=None):
+    """Build a Deps wired to a temp ``posts_dir`` and (optionally) a fake model client."""
+    return Deps(
+        llm=_FakeLLM(invoke_fn),
+        images=_NoopImages(),
+        retriever=NoopRetriever(),
+        posts_dir=posts_dir,
+        git=lambda *args, **kwargs: None,  # noqa: ARG005
+    )
+
+
+def _cfg(deps):
+    """Wrap ``deps`` as the LangGraph runnable config nodes read via get_deps."""
+    return {"configurable": {"deps": deps}}
 
 
 class PipelineTests(unittest.TestCase):
@@ -29,11 +69,12 @@ class PipelineTests(unittest.TestCase):
             "slug": "safe-write",
             "draft": "متن",
         }
-        with tempfile.TemporaryDirectory() as posts_dir, patch.object(nodes, "POSTS_DIR", posts_dir):
-            result = nodes.build(state)
+        with tempfile.TemporaryDirectory() as posts_dir:
+            cfg = _cfg(_deps(posts_dir))
+            result = nodes.build(state, cfg)
             self.assertTrue(os.path.isfile(os.path.join(result["folder_path"], "content.md")))
             with self.assertRaises(FileExistsError):
-                nodes.build(state)
+                nodes.build(state, cfg)
 
     def test_mdfy_stops_for_text_then_metadata_confirmation(self):
         def fake_invoke(_stage, schema, _messages, retries=1, config=None):
@@ -57,10 +98,8 @@ class PipelineTests(unittest.TestCase):
                 return _EMPTY_PLAN
             raise AssertionError(f"schema ناشناخته: {schema}")
 
-        with tempfile.TemporaryDirectory() as posts_dir, patch.object(
-            nodes, "POSTS_DIR", posts_dir
-        ), patch.object(nodes, "invoke_structured", side_effect=fake_invoke):
-            session = ArticleSession("test-mdfy-flow")
+        with tempfile.TemporaryDirectory() as posts_dir:
+            session = ArticleSession("test-mdfy-flow", deps=_deps(posts_dir, fake_invoke))
             session.start()
             self.assertEqual(session.current_node(), "draft")
 
@@ -91,7 +130,7 @@ class PipelineTests(unittest.TestCase):
             # desc is still the draft's desc after metadata extraction.
             self.assertEqual(session.values()["desc"], "خلاصه‌ی اولیه")
 
-            with patch.object(controller, "POSTS_DIR", posts_dir):
+            with patch.object(decisions, "POSTS_DIR", posts_dir):
                 edit = next_command({
                     "action": "metadata",
                     "title": "عنوان ویرایش‌شده",
@@ -116,15 +155,13 @@ class PipelineTests(unittest.TestCase):
                 )
             raise AssertionError(f"unexpected schema: {schema}")
 
-        with tempfile.TemporaryDirectory() as posts_dir, patch.object(
-            nodes, "POSTS_DIR", posts_dir
-        ), patch.object(nodes, "invoke_structured", side_effect=fake_invoke):
+        with tempfile.TemporaryDirectory() as posts_dir:
             nodes.extract_metadata({
                 "draft": "X" * 20000,  # A large body that must NOT be sent to the model.
                 "title_hint": "عنوان پیشنهادی",
                 "keywords": ["بنچمارک", "SPEC"],
                 "desc": "خلاصه‌ی کوتاه",
-            }, config={})
+            }, _cfg(_deps(posts_dir, fake_invoke)))
         sent = captured["user_message"]
         self.assertNotIn("X" * 100, sent)  # The large body was not forwarded.
         self.assertIn("عنوان پیشنهادی", sent)
@@ -150,10 +187,8 @@ class PipelineTests(unittest.TestCase):
                 return _EMPTY_PLAN
             raise AssertionError(f"schema ناشناخته: {schema}")
 
-        with tempfile.TemporaryDirectory() as posts_dir, patch.object(
-            nodes, "POSTS_DIR", posts_dir
-        ), patch.object(nodes, "invoke_structured", side_effect=fake_invoke):
-            session = ArticleSession("test-manual-edit")
+        with tempfile.TemporaryDirectory() as posts_dir:
+            session = ArticleSession("test-manual-edit", deps=_deps(posts_dir, fake_invoke))
             session.start()
             session.resume(next_command({
                 "action": "source",
@@ -197,10 +232,8 @@ class PipelineTests(unittest.TestCase):
                 ])
             raise AssertionError(f"schema ناشناخته: {schema}")
 
-        with tempfile.TemporaryDirectory() as posts_dir, patch.object(
-            nodes, "POSTS_DIR", posts_dir
-        ), patch.object(nodes, "invoke_structured", side_effect=fake_invoke):
-            session = ArticleSession("test-enrich-revision")
+        with tempfile.TemporaryDirectory() as posts_dir:
+            session = ArticleSession("test-enrich-revision", deps=_deps(posts_dir, fake_invoke))
             session.start()
             session.resume(next_command({
                 "action": "source",
@@ -252,10 +285,8 @@ class PipelineTests(unittest.TestCase):
                 ])
             raise AssertionError(f"schema ناشناخته: {schema}")
 
-        with tempfile.TemporaryDirectory() as posts_dir, patch.object(
-            nodes, "POSTS_DIR", posts_dir
-        ), patch.object(nodes, "invoke_structured", side_effect=fake_invoke):
-            session = ArticleSession("test-two-llm-calls")
+        with tempfile.TemporaryDirectory() as posts_dir:
+            session = ArticleSession("test-two-llm-calls", deps=_deps(posts_dir, fake_invoke))
             session.start()
             session.resume(next_command({
                 "action": "source",
@@ -293,10 +324,8 @@ class PipelineTests(unittest.TestCase):
                 return _EMPTY_PLAN
             raise AssertionError(f"schema ناشناخته: {schema}")
 
-        with tempfile.TemporaryDirectory() as posts_dir, patch.object(
-            nodes, "POSTS_DIR", posts_dir
-        ), patch.object(nodes, "invoke_structured", side_effect=fake_invoke):
-            session = ArticleSession("test-revise-text-carry")
+        with tempfile.TemporaryDirectory() as posts_dir:
+            session = ArticleSession("test-revise-text-carry", deps=_deps(posts_dir, fake_invoke))
             session.start()
             session.resume(next_command({
                 "action": "source",

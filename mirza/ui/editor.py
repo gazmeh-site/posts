@@ -7,7 +7,7 @@ import uuid
 
 from chainlit.config import public_dir
 
-from ..components import COMPONENTS
+from ..domain.components import COMPONENTS
 
 EDIT_TIMEOUT = 1800
 _PUBLIC_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "public")

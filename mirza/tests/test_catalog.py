@@ -3,7 +3,7 @@ import os
 import tempfile
 import unittest
 
-from mirza.catalog import (
+from mirza.domain.catalog import (
     placement_details,
     resolve_article_folder,
     scan_post_catalog,
