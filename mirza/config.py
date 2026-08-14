@@ -40,6 +40,11 @@ GEMINI_IMAGE_URL = (
 
 _VALID_EFFORTS = ("none", "low", "medium", "high")
 
+# Some Anthropic-compatible gateways (e.g. 9router) reject the assistant-prefill trick
+# with "This model does not support assistant message prefill"; set MIRZA_PREFILL=false
+# there. JSON extraction in llm.py handles responses both with and without prefill.
+PREFILL_ENABLED = os.getenv("MIRZA_PREFILL", "true").strip().lower() not in {"0", "false", "no"}
+
 _DEFAULT_MODEL = os.getenv("MIRZA_MODEL") or os.getenv("ANTHROPIC_MODEL") or "claude-sonnet-5"
 _DEFAULT_API_BASE = (
     os.getenv("MIRZA_API_BASE") or os.getenv("ANTHROPIC_BASE_URL") or os.getenv("ANTHROPIC_API_URL")

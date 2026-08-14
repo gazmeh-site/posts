@@ -9,7 +9,7 @@ desktop.ini
 ._*
 
 # Secrets
-.env
+.env*
 
 # Local Mirza writer profile (copy mirza/.writer.example.py)
 /mirza/.writer.py

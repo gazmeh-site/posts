@@ -10,7 +10,7 @@ import requests
 from langchain_core.messages import AIMessage, SystemMessage
 from langchain_litellm import ChatLiteLLM
 
-from .config import GEMINI_API_KEY, GEMINI_IMAGE_URL, STAGES
+from .config import GEMINI_API_KEY, GEMINI_IMAGE_URL, PREFILL_ENABLED, STAGES
 
 # Unsupported params (e.g. reasoning_effort on a model that doesn't take it) are
 # dropped instead of raising, since STAGES lets any stage point at any provider.
@@ -99,9 +99,10 @@ def invoke_structured(stage: str, schema, messages, retries: int = 2, config=Non
     schema_json = json.dumps(schema.model_json_schema(), ensure_ascii=False)
     # Prefilling the assistant turn with '{' forces the model to continue as JSON, but
     # Anthropic rejects any assistant prefill while extended thinking is enabled ("a
-    # final assistant message must start with a thinking block"). Only prefill for
-    # stages without thinking; _extract_json_object already handles both shapes.
-    prefill = [AIMessage("{")] if cfg.effort == "none" else []
+    # final assistant message must start with a thinking block"), and some gateways
+    # (9router) reject prefill outright. Only prefill for stages without thinking and
+    # when PREFILL_ENABLED; _extract_json_object already handles both shapes.
+    prefill = [AIMessage("{")] if cfg.effort == "none" and PREFILL_ENABLED else []
     attempts = retries + 1
     last_err = None
     ai = None

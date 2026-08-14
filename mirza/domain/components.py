@@ -134,12 +134,6 @@ COMPONENTS: dict[str, Component] = {
         item_component="tabs-item", item_props=_LABEL_PROPS,
         max_per_article=2,
     ),
-    "accordion": Component(
-        name="accordion", category="چیدمان", kind="group",
-        when="چند پرسش‌وپاسخ یا موضوعِ مستقل که پیش‌فرض بسته‌اند.",
-        item_component="accordion-item", item_props=_LABEL_PROPS,
-        max_per_article=2,
-    ),
     "collapsible": Component(
         name="collapsible", category="چیدمان", kind="wrapper",
         when="یک بخشِ فرعیِ طولانی که پیش‌فرض باید جمع باشد.",

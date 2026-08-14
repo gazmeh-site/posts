@@ -114,14 +114,15 @@ class PrefillConditioningTests(unittest.TestCase):
     """Anthropic rejects assistant-message prefill while extended thinking is enabled,
     so invoke_structured must only prefill '{' for stages with effort == 'none'."""
 
-    def _run(self, effort):
+    def _run(self, effort, prefill_enabled=True):
         fake_cfg = StageConfig(
             model="anthropic/claude-sonnet-5", temperature=0.1, effort=effort,
             max_tokens=100, stream=False, api_base=None, api_key="k",
         )
         fake_llm = _FakeChatModel()
         with patch.object(llm, "STAGES", {"test": fake_cfg}), \
-             patch.object(llm, "get_chat_llm", return_value=fake_llm):
+             patch.object(llm, "get_chat_llm", return_value=fake_llm), \
+             patch.object(llm, "PREFILL_ENABLED", prefill_enabled):
             result = llm.invoke_structured("test", _Schema, [HumanMessage("hi")])
         return result, fake_llm.captured
 
@@ -133,6 +134,13 @@ class PrefillConditioningTests(unittest.TestCase):
 
     def test_prefill_omitted_when_effort_enabled(self):
         result, captured = self._run("medium")
+        self.assertEqual(result.x, 1)
+        self.assertNotIsInstance(captured[-1], AIMessage)
+
+    def test_prefill_omitted_when_disabled(self):
+        # Gateways like 9router reject assistant prefill ("This model does not
+        # support assistant message prefill"); MIRZA_PREFILL=false must skip it.
+        result, captured = self._run("none", prefill_enabled=False)
         self.assertEqual(result.x, 1)
         self.assertNotIsInstance(captured[-1], AIMessage)
 
